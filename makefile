@@ -6,12 +6,20 @@ PGM		= rpn
 
 all:	$(PGM)
 
-$(PGM):	$(OBJS)
-		$(CC) -o $(PGM) $(OBJS) $(LDFLAGS) 
+$(PGM): $(OBJS)
+		$(CC) -o $(PGM) $(OBJS) $(LDFLAGS)
 
-.c.o:
+%.o: 	%.c
 		$(CC) $(CFLAGS) $<
 
 clean:
 		rm -f $(PGM)
 		rm -f $(OBJS)
+
+# For development
+
+check:
+		cppcheck *.c *.h
+
+valgrind: $(PGM)
+		valgrind ./$(PGM)
