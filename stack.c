@@ -97,7 +97,7 @@ short stack_hasAtLeast(Stack s, int n) {
  * @param s The stack to free. Note that all of the chained elements will be
  *          freed as well
  */
-void stack_delete(Stack s) {
+Stack stack_delete(Stack s) {
     Stack below = NULL;
 
     while (s) {
@@ -105,5 +105,7 @@ void stack_delete(Stack s) {
         free(s);
         s = below;
     }
+
+    return s;
 }
 

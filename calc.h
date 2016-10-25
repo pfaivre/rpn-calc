@@ -31,7 +31,5 @@ Stack _calc_proceed(Stack s, const char* command);
 
 Stack calc_parse(Stack s, const char* string);
 
-void calc_printMessageCode(int code);
-
 #endif
 

@@ -1,15 +1,16 @@
 CC		= gcc
 OBJS	= main.o calc.o stack.o utils.o
-CFLAGS	= -c -g -Wall -pedantic -std=c99
+STD		= c99
+CFLAGS	= -c -g -Wall -pedantic -std=$(STD)
 LDFLAGS	= -lm
 PGM		= rpn
 
 all:	$(PGM)
 
-$(PGM): $(OBJS)
+$(PGM):	$(OBJS)
 		$(CC) -o $(PGM) $(OBJS) $(LDFLAGS)
 
-%.o: 	%.c
+%.o:	%.c
 		$(CC) $(CFLAGS) $<
 
 clean:
@@ -19,7 +20,7 @@ clean:
 # For development
 
 check:
-		cppcheck *.c *.h
+		cppcheck -q --std=$(STD) *.c *.h
 
 valgrind: $(PGM)
 		valgrind ./$(PGM)

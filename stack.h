@@ -46,7 +46,7 @@ short stack_isEmpty(Stack);
 
 short stack_hasAtLeast(Stack, int);
 
-void stack_delete(Stack);
+Stack stack_delete(Stack);
 
 #endif
 
