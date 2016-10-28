@@ -26,38 +26,46 @@ SOFTWARE.
 #include <stdlib.h>
 #include <string.h>
 
-#include "calc.h"
-#include "stack.h"
 #include "io.h"
 
 /**
- * Things to be done next:
- * TODO: Support floating point precision
- * TODO: Read a script file
- * TODO: Read expression from -e parameter
- * TODO: Add registers
- * TODO: Support compact notation limiting usage of space (e.g. "2 3*p")
+ * Read the standard input until EOF or carriage return.
+ * It can support an arbitrary amount of text.
+ * TODO: Write directly in the input without the buffer
  */
+char *bufferedInput() {
+    char *input = calloc(1,1);
+    char *realloc_ptr = NULL;
+    char buffer[STDIN_BUFFER_SIZE];
+    char c = 0;
+    int count = 0;
 
+    while(!feof(stdin) && c != '\n') {
+        c = getchar();
+        buffer[count++] = c;
+        buffer[count] = '\0';
 
-int main(int argc, char** argv) {
-    char* input = NULL;
-    Stack s = stack_init();
+        if (strlen(buffer) >= STDIN_BUFFER_SIZE - 1) {
+            realloc_ptr = realloc(input, strlen(input) + strlen(buffer) + 1);
+            if (!realloc_ptr)
+                return input;
+            input = realloc_ptr;
 
-    input = bufferedInput();
-
-    while (input && input[strlen(input)-1] != EOF) {
-        s = calc_parse(s, input);
-
-        free(input);
-
-        input = bufferedInput();
+            strcat(input, buffer);
+            buffer[0] = '\0';
+            count = 0;
+        }
     }
 
-    stack_delete(s);
-    free(input);
-    puts("");
+    if (strlen(buffer) > 0) {
+        realloc_ptr = realloc(input, strlen(input) + strlen(buffer) + 1);
+        if (!realloc_ptr)
+            return input;
+        input = realloc_ptr;
 
-    return 0;
+        strcat(input, buffer);
+    }
+
+    return input;
 }
 

@@ -8,4 +8,12 @@ For example the calculation `(3 + 5) * 7` can be noted as `3 5 + 7 *` in RPN.
 
 ## Usage
 
-By default, it takes the commands in the stdin.
+By default, it takes the commands in the stdin so it can be used either interactively or with a pipe
+```sh
+$ rpn
+```
+
+```sh
+$ echo "2 3 + p" | rpn
+```
+

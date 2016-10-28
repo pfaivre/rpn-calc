@@ -22,42 +22,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#ifndef IO_H
+#define IO_H
 
-#include "calc.h"
-#include "stack.h"
-#include "io.h"
+#define STDIN_BUFFER_SIZE 16
 
-/**
- * Things to be done next:
- * TODO: Support floating point precision
- * TODO: Read a script file
- * TODO: Read expression from -e parameter
- * TODO: Add registers
- * TODO: Support compact notation limiting usage of space (e.g. "2 3*p")
- */
+char *bufferedInput();
 
-
-int main(int argc, char** argv) {
-    char* input = NULL;
-    Stack s = stack_init();
-
-    input = bufferedInput();
-
-    while (input && input[strlen(input)-1] != EOF) {
-        s = calc_parse(s, input);
-
-        free(input);
-
-        input = bufferedInput();
-    }
-
-    stack_delete(s);
-    free(input);
-    puts("");
-
-    return 0;
-}
+#endif
 

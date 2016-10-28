@@ -1,5 +1,5 @@
 CC		= gcc
-OBJS	= main.o calc.o stack.o utils.o
+OBJS	= main.o calc.o stack.o io.o
 STD		= c99
 CFLAGS	= -c -g -Wall -pedantic -std=$(STD)
 LDFLAGS	= -lm

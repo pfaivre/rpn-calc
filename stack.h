@@ -25,12 +25,14 @@ SOFTWARE.
 #ifndef STACK_H
 #define STACK_H
 
+#include <stdbool.h>
+
 /**
- * An implementation of a stack as a linked list.
- * A stack can be accessed by a pointer to its higer element.
+ * An implementation of a stack as a FILO linked list.
+ * A stack can be accessed by a pointer to its higest element.
  */
 typedef struct StructStack {
-    int val;
+    long val;
     struct StructStack* below;
 } StructStack;
 
@@ -38,13 +40,13 @@ typedef StructStack* Stack;
 
 Stack stack_init();
 
-Stack stack_push(Stack, int);
+Stack stack_push(Stack, long);
 
-Stack stack_pop(Stack, int*);
+Stack stack_pop(Stack, long*);
 
-short stack_isEmpty(Stack);
+bool stack_isEmpty(Stack);
 
-short stack_hasAtLeast(Stack, int);
+bool stack_hasAtLeast(Stack, long);
 
 Stack stack_delete(Stack);
 

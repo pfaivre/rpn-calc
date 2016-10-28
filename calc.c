@@ -37,7 +37,7 @@ SOFTWARE.
 Stack _calc_proceed(Stack s, const char* command) {
     // A number
     if (isdigit(command[0]) || command[0] == '_') {
-        int number;
+        long number;
 
         // Negative number
         if (command[0] == '_') {
@@ -57,7 +57,7 @@ Stack _calc_proceed(Stack s, const char* command) {
                 puts("rpn: stack empty");
                 return s;
             }
-            int a;
+            long a;
             s = stack_pop(s, &a);
             s->val += a;
         }
@@ -67,7 +67,7 @@ Stack _calc_proceed(Stack s, const char* command) {
                 puts("rpn: stack empty");
                 return s;
             }
-            int a;
+            long a;
             s = stack_pop(s, &a);
             s->val -= a;
         }
@@ -77,7 +77,7 @@ Stack _calc_proceed(Stack s, const char* command) {
                 puts("rpn: stack empty");
                 return s;
             }
-            int a;
+            long a;
             s = stack_pop(s, &a);
             s->val *= a;
         }
@@ -92,7 +92,7 @@ Stack _calc_proceed(Stack s, const char* command) {
                 return s;
             }
 
-            int a;
+            long a;
             s = stack_pop(s, &a);
             s->val /= a;
         }
@@ -107,7 +107,7 @@ Stack _calc_proceed(Stack s, const char* command) {
                 return s;
             }
 
-            int a;
+            long a;
             s = stack_pop(s, &a);
             s->val %= a;
         }
@@ -118,10 +118,10 @@ Stack _calc_proceed(Stack s, const char* command) {
                 return s;
             }
 
-            int a, b;
+            long a, b;
             s = stack_pop(s, &a);
             s = stack_pop(s, &b);
-            b = (int)round(pow(b, a));
+            b = (long)round(pow(b, a));
             s = stack_push(s, b);
         }
         // Square root
@@ -131,9 +131,9 @@ Stack _calc_proceed(Stack s, const char* command) {
                 return s;
             }
 
-            int a;
+            long a;
             s = stack_pop(s, &a);
-            a = (int)round(sqrt(a));
+            a = (long)round(sqrt(a));
             s = stack_push(s, a);
         }
         // Clear the stack
@@ -146,13 +146,13 @@ Stack _calc_proceed(Stack s, const char* command) {
                 puts("rpn: stack empty");
                 return s;
             }
-            printf("%d\n", s->val);
+            printf("%ld\n", s->val);
         }
         // Print all the stack
         else if (strcmp(command, "f") == 0) {
             Stack below = s;
             while (below) {
-                printf("%d\n", below->val);
+                printf("%ld\n", below->val);
                 below = below->below;
             }
         }
@@ -170,19 +170,14 @@ Stack _calc_proceed(Stack s, const char* command) {
                 puts("rpn: stack empty");
                 return s;
             }
-            int a, b;
+            long a, b;
             s = stack_pop(s, &a);
             s = stack_pop(s, &b);
             s = stack_push(s, a);
             s = stack_push(s, b);
         }
-        // CTRL-D or end of file
-        else if (command[0] == EOF) {
-            // TODO: exit in the main to free the memory
-            exit(0);
-        }
         else {
-            printf("rpn: %s unimplemented\n", command);
+            printf("rpn: '%c' (%#o) unimplemented\n", command[0], command[0]);
         }
     }
 

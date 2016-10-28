@@ -24,6 +24,7 @@ SOFTWARE.
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #include "stack.h"
 
@@ -40,7 +41,7 @@ Stack stack_init() {
  * @param val value to add
  * @return the new top of the stack
  */
-Stack stack_push(Stack s, int val) {
+Stack stack_push(Stack s, long val) {
     Stack n = (Stack) malloc(sizeof(StructStack));
 
     if (!n) {
@@ -60,7 +61,7 @@ Stack stack_push(Stack s, int val) {
  * @param val pointer to store the taken value
  * @return the new top of the stack
  */
-Stack stack_pop(Stack s, int* val) {
+Stack stack_pop(Stack s, long* val) {
     Stack below = NULL;
 
     if (s) {
@@ -74,17 +75,17 @@ Stack stack_pop(Stack s, int* val) {
 
 /**
  * Check if the stack is empty
- * @return boolean
+ * @return true if there is no more elements in the stack
  */
-short stack_isEmpty(Stack s) {
+bool stack_isEmpty(Stack s) {
     return s == NULL;
 }
 
 /**
  * Check if the stack has at least n elements
- * @return boolean
+ * @return true if the is n or more elements in the stack
  */
-short stack_hasAtLeast(Stack s, int n) {
+bool stack_hasAtLeast(Stack s, long n) {
     while (s != NULL && (n-- > 0)) {
         s = s->below;
     }
