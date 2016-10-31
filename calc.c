@@ -26,7 +26,8 @@ SOFTWARE.
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <math.h>
+
+#include <gmp.h>
 
 #include "calc.h"
 #include "stack.h"
@@ -37,50 +38,60 @@ SOFTWARE.
 Stack _calc_proceed(Stack s, const char* command) {
     // A number
     if (isdigit(command[0]) || command[0] == '_') {
-        long number;
+        mpz_t number;
 
         // Negative number
         if (command[0] == '_') {
-            number = -strtol(command + 1, NULL, 10);
+            mpz_init_set_str(number, command + 1, 10);
+            mpz_neg(number, number);
         }
         // Positive number
         else
-            number = strtol(command, NULL, 10);
+            mpz_init_set_str(number, command, 10);
 
         s = stack_push(s, number);
+        mpz_clear(number);
     }
+
     // A command
     else {
+
         // Addition
         if (strcmp(command, "+") == 0) {
             if (!stack_hasAtLeast(s, 2)) {
                 puts("rpn: stack empty");
                 return s;
             }
-            long a;
+            mpz_t a;
             s = stack_pop(s, &a);
-            s->val += a;
+            mpz_add(s->val, s->val, a);
+            mpz_clear(a);
         }
+
         // Subtraction
         else if (strcmp(command, "-") == 0) {
             if (!stack_hasAtLeast(s, 2)) {
                 puts("rpn: stack empty");
                 return s;
             }
-            long a;
+            mpz_t a;
             s = stack_pop(s, &a);
-            s->val -= a;
+            mpz_sub(s->val, s->val, a);
+            mpz_clear(a);
         }
+
         // Multiplication
         else if (strcmp(command, "*") == 0) {
             if (!stack_hasAtLeast(s, 2)) {
                 puts("rpn: stack empty");
                 return s;
             }
-            long a;
+            mpz_t a;
             s = stack_pop(s, &a);
-            s->val *= a;
+            mpz_mul(s->val, s->val, a);
+            mpz_clear(a);
         }
+
         // Division
         else if (strcmp(command, "/") == 0) {
             if (!stack_hasAtLeast(s, 2)) {
@@ -91,11 +102,12 @@ Stack _calc_proceed(Stack s, const char* command) {
                 puts("rpn: divide by zero");
                 return s;
             }
-
-            long a;
+            mpz_t a;
             s = stack_pop(s, &a);
-            s->val /= a;
+            mpz_tdiv_q(s->val, s->val, a);
+            mpz_clear(a);
         }
+
         // Division remainder
         else if (strcmp(command, "%") == 0) {
             if (!stack_hasAtLeast(s, 2)) {
@@ -106,56 +118,59 @@ Stack _calc_proceed(Stack s, const char* command) {
                 puts("rpn: remainder by zero");
                 return s;
             }
-
-            long a;
+            mpz_t a;
             s = stack_pop(s, &a);
-            s->val %= a;
+            mpz_tdiv_r(s->val, s->val, a);
+            mpz_clear(a);
         }
+
         // Exponentiation
         else if (strcmp(command, "^") == 0) {
             if (!stack_hasAtLeast(s, 2)) {
                 puts("rpn: stack empty");
                 return s;
             }
-
-            long a, b;
+            mpz_t a;
             s = stack_pop(s, &a);
-            s = stack_pop(s, &b);
-            b = (long)round(pow(b, a));
-            s = stack_push(s, b);
+            long exp = mpz_get_ui(a);
+            mpz_pow_ui(s->val, s->val, exp);
+            mpz_clear(a);
         }
+
         // Square root
         else if (strcmp(command, "v") == 0) {
             if (!stack_hasAtLeast(s, 1)) {
                 puts("rpn: stack empty");
                 return s;
             }
-
-            long a;
-            s = stack_pop(s, &a);
-            a = (long)round(sqrt(a));
-            s = stack_push(s, a);
+            mpz_root(s->val, s->val, 2);
         }
+
         // Clear the stack
         else if (strcmp(command, "c") == 0) {
             s = stack_delete(s);
         }
+
         // Print the top value
         else if (strcmp(command, "p") == 0) {
             if (!stack_hasAtLeast(s, 1)) {
                 puts("rpn: stack empty");
                 return s;
             }
-            printf("%ld\n", s->val);
+            mpz_out_str(stdout, 10, s->val);
+            puts("");
         }
+
         // Print all the stack
         else if (strcmp(command, "f") == 0) {
             Stack below = s;
             while (below) {
-                printf("%ld\n", below->val);
+                mpz_out_str(stdout, 10, below->val);
+                puts("");
                 below = below->below;
             }
         }
+
         // Duplicate the value at the top
         else if (strcmp(command, "d") == 0) {
             if (!stack_hasAtLeast(s, 1)) {
@@ -164,17 +179,18 @@ Stack _calc_proceed(Stack s, const char* command) {
             }
             s = stack_push(s, s->val);
         }
+
         // Swap the top two value of the stack
         else if (strcmp(command, "r") == 0) {
             if (!stack_hasAtLeast(s, 2)) {
                 puts("rpn: stack empty");
                 return s;
             }
-            long a, b;
-            s = stack_pop(s, &a);
-            s = stack_pop(s, &b);
-            s = stack_push(s, a);
-            s = stack_push(s, b);
+            mpz_t tmp;
+            mpz_init_set(tmp, s->val);
+            mpz_set(s->val, s->below->val);
+            mpz_set(s->below->val, tmp);
+            mpz_clear(tmp);
         }
         else {
             printf("rpn: '%c' (%#o) unimplemented\n", command[0], command[0]);

@@ -32,7 +32,7 @@ SOFTWARE.
 
 /**
  * Things to be done next:
- * TODO: Support floating point precision
+ * TODO: Support arbitrary precision for decimal
  * TODO: Read a script file
  * TODO: Read expression from -e parameter
  * TODO: Add registers

@@ -27,12 +27,14 @@ SOFTWARE.
 
 #include <stdbool.h>
 
+#include <gmp.h>
+
 /**
  * An implementation of a stack as a FILO linked list.
  * A stack can be accessed by a pointer to its higest element.
  */
 typedef struct StructStack {
-    long val;
+    mpz_t val;
     struct StructStack* below;
 } StructStack;
 
@@ -40,13 +42,13 @@ typedef StructStack* Stack;
 
 Stack stack_init();
 
-Stack stack_push(Stack, long);
+Stack stack_push(Stack, mpz_t);
 
-Stack stack_pop(Stack, long*);
+Stack stack_pop(Stack, mpz_t*);
 
 bool stack_isEmpty(Stack);
 
-bool stack_hasAtLeast(Stack, long);
+bool stack_hasAtLeast(Stack, int);
 
 Stack stack_delete(Stack);
 

@@ -26,6 +26,8 @@ SOFTWARE.
 #include <stdlib.h>
 #include <stdbool.h>
 
+#include <gmp.h>
+
 #include "stack.h"
 
 /**
@@ -41,7 +43,7 @@ Stack stack_init() {
  * @param val value to add
  * @return the new top of the stack
  */
-Stack stack_push(Stack s, long val) {
+Stack stack_push(Stack s, mpz_t val) {
     Stack n = (Stack) malloc(sizeof(StructStack));
 
     if (!n) {
@@ -49,7 +51,7 @@ Stack stack_push(Stack s, long val) {
         exit(1);
     }
 
-    n->val = val;
+    mpz_init_set(n->val, val);
     n->below = s;
 
     return n;
@@ -61,12 +63,13 @@ Stack stack_push(Stack s, long val) {
  * @param val pointer to store the taken value
  * @return the new top of the stack
  */
-Stack stack_pop(Stack s, long* val) {
+Stack stack_pop(Stack s, mpz_t *val) {
     Stack below = NULL;
 
     if (s) {
-        *val = s->val;
+        mpz_init_set(*val, s->val);
         below = s->below;
+        mpz_clear(s->val);
         free(s);
     }
 
@@ -85,7 +88,7 @@ bool stack_isEmpty(Stack s) {
  * Check if the stack has at least n elements
  * @return true if the is n or more elements in the stack
  */
-bool stack_hasAtLeast(Stack s, long n) {
+bool stack_hasAtLeast(Stack s, int n) {
     while (s != NULL && (n-- > 0)) {
         s = s->below;
     }
@@ -103,6 +106,7 @@ Stack stack_delete(Stack s) {
 
     while (s) {
         below = s->below;
+        mpz_clear(s->val);
         free(s);
         s = below;
     }
