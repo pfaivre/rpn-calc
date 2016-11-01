@@ -4,6 +4,13 @@ sudo: false
 
 compiler: gcc
 
+addons:
+  apt:
+    packages:
+    - cppcheck
+    - libgmp-dev
+
 script:
   - make clean
+  - make check
   - make
