@@ -47,7 +47,7 @@ Stack stack_push(Stack s, mpz_t val) {
     Stack n = (Stack) malloc(sizeof(StructStack));
 
     if (!n) {
-        puts("Memory allocation error\n");
+        fputs("Memory allocation error\n", stderr);
         exit(1);
     }
 
