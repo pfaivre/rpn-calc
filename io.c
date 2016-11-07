@@ -69,3 +69,18 @@ char *bufferedInput() {
     return input;
 }
 
+void printUsage(const char *progName) {
+    printf("Usage: %s [OPTION]\n", progName);
+    puts("  -e, --expression=EXPR    evaluate expression");
+    puts("  -h, --help               display this help and exit");
+    puts("  -V, --version            output version information and exit");
+}
+
+void printVersion(const char *version, const char *copyright) {
+    printf("rpn %s\n", version);
+    puts("");
+    puts(copyright);
+    puts("This is free software; see the source for copying conditions.  There is NO");
+    puts("warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE,");
+    puts("to the extent permitted by law.");
+}

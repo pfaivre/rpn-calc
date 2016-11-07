@@ -22,9 +22,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+#define _POSIX_C_SOURCE 200809L // Enables use of strdup
+
+#define VERSION "0.1"
+#define COPYRIGHT "Copyright 2016 Pierre Faivre"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
+#include <unistd.h>
+#include <getopt.h>
 
 #include "calc.h"
 #include "stack.h"
@@ -34,30 +42,75 @@ SOFTWARE.
  * Things to be done next:
  * TODO: Support arbitrary precision for decimal
  * TODO: Read a script file
- * TODO: Read expression from -e parameter
  * TODO: Add registers
  * TODO: Support compact notation limiting usage of space (e.g. "2 3*p")
  */
 
 
-int main(int argc, char** argv) {
-    char* input = NULL;
-    Stack s = stack_init();
+int main(int argc, char **argv) {
+    bool opt_e = false;
+    char *expression = NULL;
+    char option;
 
-    input = bufferedInput();
+    while (1) {
+        int option_index = 0;
+        static struct option long_options[] = {
+            {"expression", required_argument, 0, 'e'},
+            {"help",       no_argument,       0, 'h'},
+            {"version",    no_argument,       0, 'V'},
+            {0,            0,                 0,  0 }
+        };
 
-    while (input && input[strlen(input)-1] != EOF) {
-        s = calc_parse(s, input);
+        option = getopt_long(argc, argv, "e:hV", long_options, &option_index);
 
-        free(input);
+        if (option == -1)
+            break;
 
-        input = bufferedInput();
+        switch (option) {
+            case 'e':
+                opt_e = true;
+                // TODO: Append rather than replace the string (for multiple use of -e)
+                expression = strdup(optarg);
+                break;
+            case 'h':
+                printUsage(argv[0]);
+                exit(0);
+            case 'V':
+                printVersion(VERSION, COPYRIGHT);
+                exit(0);
+            default:
+                printUsage(argv[0]);
+                exit(1);
+        }
     }
 
-    stack_delete(s);
-    free(input);
-    puts("");
+    // Option -e
+    if (opt_e) {
+        Stack s = stack_init();
 
+        s = calc_parse(s, expression);
+
+        free(expression);
+        stack_delete(s);
+    }
+    // No -e nor -f
+    else {
+        char *input = NULL;
+        Stack s = stack_init();
+        input = bufferedInput();
+
+        while (input && input[strlen(input)-1] != EOF) {
+            s = calc_parse(s, input);
+
+            free(input);
+
+            input = bufferedInput();
+        }
+
+        stack_delete(s);
+        free(input);
+    }
+    
     return 0;
 }
 
