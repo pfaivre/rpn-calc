@@ -84,3 +84,37 @@ void printVersion(const char *version, const char *copyright) {
     puts("warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE,");
     puts("to the extent permitted by law.");
 }
+
+/**
+ * Allocate the space to concatenate two strings and copy src at the end of dest.
+ * @param dest String to modify
+ * @param src String to append to dest
+ * @return The new pointer location
+ */
+char *strAppend(char *dest, const char *src) {
+    // If not allocated yet, just copy
+    if (dest == NULL) {
+        dest = (char*) malloc(sizeof(char) * (strlen(src) + 1));
+        
+        if (dest == NULL) {
+            fputs("Memory allocation error\n", stderr);
+            exit(1);
+        }
+        
+        strcpy(dest, src);
+    }
+    // Otherwise, concatenate them
+    else {
+        dest = (char*) realloc(dest, sizeof(char) * (strlen(src) + strlen(dest) + 1));
+        
+        if (dest == NULL) {
+            fputs("Memory allocation error\n", stderr);
+            exit(1);
+        }
+
+        strcat(dest, src);
+    }
+
+    return dest;
+}
+

@@ -22,8 +22,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#define _POSIX_C_SOURCE 200809L // Enables use of strdup
-
 #define VERSION "0.1"
 #define COPYRIGHT "Copyright 2016 Pierre Faivre"
 
@@ -40,10 +38,14 @@ SOFTWARE.
 
 /**
  * Things to be done next:
- * TODO: Support arbitrary precision for decimal
  * TODO: Read a script file
- * TODO: Add registers
+ * TODO: Support arbitrary input/output radices
+ * TODO: Support registers
+ * TODO: Support strings (execute and print)
+ * TODO: Support macros
+ * TODO: Support conditionals
  * TODO: Support compact notation limiting usage of space (e.g. "2 3*p")
+ * TODO: Support arbitrary precision for decimal
  */
 
 
@@ -69,8 +71,8 @@ int main(int argc, char **argv) {
         switch (option) {
             case 'e':
                 opt_e = true;
-                // TODO: Append rather than replace the string (for multiple use of -e)
-                expression = strdup(optarg);
+                expression = strAppend(expression, " "); // in case of multiple -e
+                expression = strAppend(expression, optarg);
                 break;
             case 'h':
                 printUsage(argv[0]);
