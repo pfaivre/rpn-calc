@@ -3,8 +3,8 @@ A humble dc clone
 
 ## Synopsis
 ```sh
-dc [-V] [--version] [-h] [--help]
-   [-e scriptexpression] [--expression=scriptexpression]
+rpn [-V] [--version] [-h] [--help]
+    [-e scriptexpression] [--expression=scriptexpression]
 ```
 
 ## Description
