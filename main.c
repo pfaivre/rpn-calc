@@ -44,7 +44,6 @@ SOFTWARE.
  * TODO: Support strings (execute and print)
  * TODO: Support macros
  * TODO: Support conditionals
- * TODO: Support compact notation limiting usage of space (e.g. "2 3*p")
  * TODO: Support arbitrary precision for decimal
  */
 

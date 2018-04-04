@@ -22,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -205,29 +206,77 @@ Stack _calc_proceed(Stack s, const char* command) {
 }
 
 /**
- * Performs a set of commands (e.g. "2 3 * p")
+ * Detects if the two chars belong to different commands
+ */
+bool _calc_tokenThreshold(char c1, char c2) {
+    // digit or minus sign (_) followed by an other digit 
+    if ((c1 == '_' || (c1 >= '0' && c1 <= '9'))
+        && (c2 >= '0' && c2 <= '9'))
+        return false;
+
+    return true;
+}
+
+/**
+ * Find the first command on the string
+ * @param token An allocated string to store the token
+ * @param str String to search the element on (operator, operand or command)
+ * @return Pointer to str after the extracted token
+ */
+char *_calc_firstToken(char *token, char *str) {
+    int i = 0;
+    token[i] = '\0';
+
+    if (!token || !str || *str == '\0') {
+        *token = '\0';
+        return NULL;
+    }
+
+    // Ignore trailing spaces and new lines    
+    while(*str == ' ' || *str == '\n') {
+        if (*str == '\0')
+            return NULL;
+
+        str++;
+    }
+
+    // Copy token chars until next one or end of string
+    while(*str != ' ' && *str != '\n' && *str != '\0') {
+        token[i++] = *str++;
+        token[i] = '\0';
+        
+        // If the next char does not belong to the current token, stop copying
+        if (_calc_tokenThreshold(token[i-1], *str)) {
+            break;
+        }
+    }
+
+    return str;
+}
+
+/**
+ * Performs a set of commands (e.g. "2 3*p")
  * @param s Stack to modify
  * @param string Commands to execute
  * @return The top of the stack after performing the commands
  */
-Stack calc_parse(Stack s, const char* string) {
-    // Perform a copy to the string to not alter the original one
-    char *scopy = malloc((strlen(string) + 1) * sizeof(char));
-    strcpy(scopy, string);
+Stack calc_parse(Stack s, char* string) {
+    char *ptr = string;
+    char *token = calloc((strlen(string) + 1), sizeof(char));
 
-    // Split it with the spaces
-    char *o = strtok(scopy, " \n");
-    while (o != NULL) {
+    ptr = _calc_firstToken(token, ptr);
+
+    while (token && token[0] != '\0') {
         // Comment
-        if (o[0] == '#')
+        if (token[0] == '#')
             break;
 
-        s = _calc_proceed(s, o);
+        s = _calc_proceed(s, token);
 
-        o = strtok(NULL, " \n");
+        ptr = _calc_firstToken(token, ptr);
     }
 
-    free(scopy);
+    free(token);
     return s;
 }
 

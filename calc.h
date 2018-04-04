@@ -25,11 +25,17 @@ SOFTWARE.
 #ifndef CALC_H
 #define CALC_H
 
+#include <stdbool.h>
+
 #include "stack.h"
 
 Stack _calc_proceed(Stack s, const char* command);
 
-Stack calc_parse(Stack s, const char* string);
+bool _calc_tokenThreshold(char c1, char c2);
+
+char *_calc_firstToken(char *token, char *str);
+
+Stack calc_parse(Stack s, char* string);
 
 #endif
 
