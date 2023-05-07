@@ -24,4 +24,4 @@ jobs:
       run: make check
 
     - name: run tests
-      run: ./tests/functional_tests.sh
+      run: bash ./tests/functional_tests.sh

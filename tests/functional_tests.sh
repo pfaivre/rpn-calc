@@ -1,31 +1,58 @@
 #!/bin/bash
 
-# 1+1=2
-result=$(echo "1 1 + p" | ./rpn)
+function test ()
+{
+    local expression=$1
+    local expected_result=$2
 
-if [ $result -ne "2" ]; then
-    echo "Test 1 1 + p failed"
-    exit 1
-fi
+    result=$(echo "$expression" | ./rpn)
+
+    if [ $result != $expected_result ]; then
+        echo "Test $expression failed"
+        exit 1
+    fi
+}
+
+
+# 1+1=2
+test "1 1 + p"  "2"
 
 # 1+(-2)=-1
-result=$(echo "1 _2 + p" | ./rpn)
+test "1 _2 + p"  "-1"
 
-if [ $result -ne "-1" ]; then
-    echo "Test 1 _2 + p failed"
-    exit 1
-fi
+# 5-1=4
+test "5 1 - p"  "4"
 
-#     ____________
+# 8*4=32
+test "8 4 * p"  "32"
+
+# 29/3=9
+test "29 3 / p"  "9"
+
+# 29%3=2
+test "29 3 % p"  "2"
+
+# 12^3=2
+test "12 3 ^ p"  "1728"
+
+#   ______
+# \/456789 = 675
+test "456789 v p"  "675"
+
+#     _____________
 #    /(12 + (-3)^4)
-#   / ----------- = -20
-# \/      11
-result=$(echo "12 _3 4 ^ + 11 / v 22 - p" | ./rpn)
+#   / ------------- -22  = -20
+# \/       11
+test "12 _3 4 ^ + 11 / v 22 - p"  "-20"
 
-if [ $result -ne "-20" ]; then
-    echo "Test 12 _3 4 ^ + 11 / v 22 - p failed"
-    exit 1
-fi
+# 9 223 372 036 854 775 807 * 1000 = 9 223 372 036 854 775 807 000
+test "9223372036854775807 1000 * p"  "9223372036854775807000"
+
+# 3+3=6
+test "3 d + p"  "6"
+
+# 2-5=6
+test "5 2 r - p"  "-3"
 
 echo "All tests passed"
 exit 0
