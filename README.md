@@ -1,4 +1,4 @@
-# rpn-calc [![Build Status](https://travis-ci.org/pfaivre/rpn-calc.svg?branch=master)](https://travis-ci.org/pfaivre/rpn-calc)
+# rpn-calc [![Build and test](https://github.com/pfaivre/rpn-calc/actions/workflows/build-test.yml/badge.svg?branch=master)](https://github.com/pfaivre/rpn-calc/actions/workflows/build-test.yml)
 A humble dc clone
 
 ## Synopsis
@@ -13,6 +13,8 @@ It stores the numbers in a stack and operates with the top ones until the
 desired result is reached.
 
 For example the calculation `(3 + 5) * 7` can be noted as `3 5 + 7 *` in RPN.
+
+See below for a complete set of commands.
 
 Thanks to [GMP](https://gmplib.org/), it supports arbitrary precision 
 arithmetic.
@@ -52,6 +54,37 @@ $ make
 $ ./rpn
 ```
 
+## Commands
+`p` Prints the top value of the stack.
+
+`+` Pops two values off the stack, adds them and pushes the result on the stack.
+
+`-` Pops two values off the stack, substracts the first from the second and pushes the result on the stack.
+
+`*` Pops two values off the stack, multiplies them and pushes the result on the stack.
+
+`/` Pops two values off the stack, divids the first from the second and pushes the result on the stack.
+
+`%` Pops two values off the stack, divids the first from the second and pushes the remainder on the stack.
+
+`^` Pops two values off the stack, use the first as the exponent and the second as the base and pushes the result on the stack.
+
+`v` Pops one value, computes its square root, and pushes the result to the stack.
+
+`d` Duplicates the top value of the stack.
+
+`r` Swaps the two top values of the stack.
+
+`c` Clears the stack.
+
+`f` Prints the entire stack without modifying it.
+
+## Limitations
+This program is much more basic than dc and currently lacks some notable features like:
+- decimal numbers
+- memory registers
+- conditionals and loops
+
 ## License
-Copyright 2016 Pierre Faivre. This is free software, and may be redistributed 
+Copyright 2016-2023 Pierre Faivre. This is free software, and may be redistributed 
 under the terms specified in the LICENSE file.
