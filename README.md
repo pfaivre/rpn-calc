@@ -1,4 +1,4 @@
-# rpn-calc [![Build Status](https://travis-ci.org/pfaivre/rpn-calc.svg?branch=master)](https://travis-ci.org/pfaivre/rpn-calc)
+# rpn-calc [![Build and test](https://github.com/pfaivre/rpn-calc/actions/workflows/build-test.yml/badge.svg?branch=master)](https://github.com/pfaivre/rpn-calc/actions/workflows/build-test.yml)
 A humble dc clone
 
 ## Synopsis
