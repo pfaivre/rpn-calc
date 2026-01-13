@@ -1,7 +1,7 @@
 /**
 MIT License
 
-Copyright (c) 2016-2023 Pierre Faivre
+Copyright (c) 2016-2026 Pierre Faivre
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -127,6 +127,40 @@ Stack _calc_proceed(Stack s, const char* command) {
             s = stack_pop(s, &a);
             mpz_tdiv_r(s->val, s->val, a);
             mpz_clear(a);
+        }
+
+        // Division with remainder (dc-style ~ operator)
+        // This feature has been coded by an AI (devstral-2512)
+        else if (strcmp(command, "~") == 0) {
+            if (!stack_hasAtLeast(s, 2)) {
+                fputs("rpn: stack empty\n", stderr);
+                return s;
+            }
+            mpz_t a, b, quotient, remainder;
+            s = stack_pop(s, &a);  // Pop divisor (top of stack)
+            s = stack_pop(s, &b);  // Pop dividend (next on stack)
+
+            if (mpz_cmp_si(a, 0) == 0) {
+                fputs("rpn: divide by zero\n", stderr);
+                mpz_clear(a);
+                mpz_clear(b);
+                return s;
+            }
+
+            // Calculate both quotient and remainder efficiently
+            mpz_init(quotient);
+            mpz_init(remainder);
+            mpz_tdiv_qr(quotient, remainder, b, a);
+
+            // Push results: quotient first, then remainder
+            s = stack_push(s, quotient);
+            s = stack_push(s, remainder);
+
+            // Clean up
+            mpz_clear(a);
+            mpz_clear(b);
+            mpz_clear(quotient);
+            mpz_clear(remainder);
         }
 
         // Exponentiation
