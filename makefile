@@ -24,3 +24,6 @@ check:
 
 valgrind: $(PGM)
 		valgrind ./$(PGM)
+
+test: $(PGM)
+		bash ./tests/functional_tests.sh
