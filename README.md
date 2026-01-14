@@ -67,6 +67,8 @@ $ ./rpn
 
 `%` Pops two values off the stack, divids the first from the second and pushes the remainder on the stack.
 
+`~` Pops two values off the stack, divides the second one popped by the first one popped. The quotient is pushed first, and the remainder is pushed next.
+
 `^` Pops two values off the stack, use the first as the exponent and the second as the base and pushes the result on the stack.
 
 `v` Pops one value, computes its square root, and pushes the result to the stack.
