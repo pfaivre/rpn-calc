@@ -13,6 +13,8 @@ $(PGM):	$(OBJS)
 %.o:	%.c
 		$(CC) $(CFLAGS) $<
 
+$(OBJS): calc.h stack.h io.h
+
 clean:
 		rm -f $(PGM)
 		rm -f $(OBJS)
@@ -20,7 +22,7 @@ clean:
 # For development
 
 check:
-		cppcheck -q --std=$(STD) *.c *.h
+		cppcheck -q --error-exitcode=1 --std=$(STD) *.c *.h
 
 valgrind: $(PGM)
 		valgrind ./$(PGM)
