@@ -1,49 +1,131 @@
 #!/bin/bash
+#
+# Functional test suite for rpn.
+# Each helper records a failure instead of aborting, so a single run
+# reports every failing test. Exits non-zero if any test failed.
 
+cd "$(dirname "$0")/.."
+
+failures=0
+tests_run=0
+
+# test EXPRESSION EXPECTED_STDOUT -- feeds EXPRESSION as one stdin line
 function test ()
 {
     local expression=$1
     local expected_result=$2
+    local result
 
+    tests_run=$((tests_run + 1))
     result=$(echo "$expression" | ./rpn)
 
     if [ "$result" != "$expected_result" ]; then
-        echo "Test $expression failed: expected '$expected_result', got '$result'"
-        exit 1
+        failures=$((failures + 1))
+        echo "FAIL '$expression': expected '$expected_result', got '$result'"
     fi
 }
 
+# test_error EXPRESSION EXPECTED_STDERR_SUBSTRING
 function test_error ()
 {
     local expression=$1
     local expected_error=$2
+    local error_result
 
+    tests_run=$((tests_run + 1))
     error_result=$(echo "$expression" | ./rpn 2>&1 >/dev/null)
-    
+
     if [[ "$error_result" != *"$expected_error"* ]]; then
-        echo "Error test $expression failed: expected '$expected_error', got '$error_result'"
-        exit 1
+        failures=$((failures + 1))
+        echo "FAIL '$expression': expected stderr to contain '$expected_error', got '$error_result'"
     fi
 }
 
+# test_stack EXPRESSION EXPECTED_TOP [EXPECTED_NEXT ...] -- 'f' prints the stack top first
 function test_stack ()
 {
     local expression=$1
-    local expected_values=("${@:2}")  # Array of expected stack values
+    shift
+    local expected_values=("$@")
+    local result expected_output
 
+    tests_run=$((tests_run + 1))
     result=$(echo "$expression" | ./rpn)
     expected_output=$(IFS=$'\n'; echo "${expected_values[*]}")
-    
+
     if [ "$result" != "$expected_output" ]; then
-        echo "Stack test $expression failed"
-        echo "Expected:"
-        echo "$expected_output"
-        echo "Got:"
-        echo "$result"
-        exit 1
+        failures=$((failures + 1))
+        echo "FAIL '$expression': expected stack '$expected_output', got '$result'"
     fi
 }
 
+# test_lines EXPECTED_STDOUT INPUT -- INPUT is fed to stdin, printf '%b' escapes
+function test_lines ()
+{
+    local expected_result=$1
+    local input=$2
+    local result
+
+    tests_run=$((tests_run + 1))
+    result=$(printf '%b' "$input" | ./rpn 2>/dev/null)
+
+    if [ "$result" != "$expected_result" ]; then
+        failures=$((failures + 1))
+        echo "FAIL lines '$input': expected '$expected_result', got '$result'"
+    fi
+}
+
+# test_e EXPECTED_STDOUT ARGS... -- runs ./rpn ARGS... and checks stdout
+function test_e ()
+{
+    local expected_result=$1
+    shift
+    local result
+
+    tests_run=$((tests_run + 1))
+    result=$(./rpn "$@")
+
+    if [ "$result" != "$expected_result" ]; then
+        failures=$((failures + 1))
+        echo "FAIL './rpn $*': expected '$expected_result', got '$result'"
+    fi
+}
+
+# test_contains SUBSTRING ARGS... -- stdout of ./rpn ARGS... contains SUBSTRING
+function test_contains ()
+{
+    local expected=$1
+    shift
+    local output
+
+    tests_run=$((tests_run + 1))
+    output=$(./rpn "$@" 2>/dev/null)
+
+    if [[ "$output" != *"$expected"* ]]; then
+        failures=$((failures + 1))
+        echo "FAIL './rpn $*': expected output to contain '$expected', got '$output'"
+    fi
+}
+
+# test_exit EXPECTED_CODE ARGS... -- ./rpn ARGS... exits with EXPECTED_CODE
+function test_exit ()
+{
+    local expected_code=$1
+    shift
+    local code
+
+    tests_run=$((tests_run + 1))
+    ./rpn "$@" >/dev/null 2>&1
+    code=$?
+
+    if [ "$code" != "$expected_code" ]; then
+        failures=$((failures + 1))
+        echo "FAIL './rpn $*': expected exit $expected_code, got $code"
+    fi
+}
+
+
+# ===== ARITHMETIC =====
 
 # 1+1=2
 test "1 1 + f"  "2"
@@ -57,94 +139,178 @@ test "5 1 - f"  "4"
 # 8*4=32
 test "8 4 * f"  "32"
 
-# 29/3=9
+# 29/3=9 (integer division)
 test "29 3 / f"  "9"
 
 # 29%3=2
 test "29 3 % f"  "2"
 
-# 12^3=2
-test "12 3 ^ f"  "1728"
+# Sum 1 to 10 = 55
+test "1 2 3 4 5 6 7 8 9 10 + + + + + + + + + f"  "55"
 
-#   ______
-# \/456789 = 675
-test "456789 v f"  "675"
+# ===== DIVISION SEMANTICS =====
+# GMP tdiv: quotient rounds toward zero, remainder takes the dividend's sign
 
-#     _____________
-#    /(12 + (-3)^4)
-#   / ------------- -22  = -20
-# \/       11
-test "12 _3 4 ^ + 11 / v 22 - f"  "-20"
+test "0 5 / p"  "0"
+test "1 1 / p"  "1"
+test "_7 2 / p"  "-3"
+test "7 _2 / p"  "-3"
+test "_7 _2 / p"  "3"
+test "_7 2 % p"  "-1"
+test "7 _2 % p"  "1"
+
+# ===== LARGE NUMBERS (arbitrary precision) =====
 
 # 9 223 372 036 854 775 807 * 1000 = 9 223 372 036 854 775 807 000
 test "9223372036854775807 1000 * f"  "9223372036854775807000"
 
+# (2^63-1)^2
+test "9223372036854775807 9223372036854775807 * p"  "85070591730234615847396907784232501249"
+
+# ===== ~ OPERATOR (DIVISION WITH REMAINDER) =====
+# dc-style: pushes quotient first, then remainder, so the remainder ends on top
+
+# 5/2 = 2 remainder 1
+test "5 2 ~ p"  "1"
+test "5 2 ~ r p"  "2"
+
+# 17/3 = 5 remainder 2
+test "17 3 ~ p"  "2"
+test "17 3 ~ r p"  "5"
+
+# -10/3 = -3 remainder -1
+test "_10 3 ~ p"  "-1"
+test "_10 3 ~ r p"  "-3"
+
+# Sign combinations: quotient then remainder, top first
+test_stack "5 2 ~ f"  "1" "2"
+test_stack "0 5 ~ f"  "0" "0"
+test_stack "_7 _2 ~ f"  "-1" "3"
+test_stack "10 _3 ~ f"  "1" "-3"
+
+test "1 1 ~ p"  "0"
+
+# ~ inside larger expressions
+test "10 3 ~ + p"  "4"       # q=3 r=1; 3+1=4
+test "20 3 ~ 2 * + p"  "10"  # q=6 r=2; 2*2=4; 6+4=10
+test "10 3 ~ 2 * + p"  "5"   # q=3 r=1; 1*2=2; 3+2=5
+test "20 3 ~ 4 * 5 + p"  "13"  # q=6 r=2; 2*4=8; 8+5=13
+test "1000000000000 7 ~ + p"  "142857142858"
+
+# ===== EXPONENTIATION AND SQUARE ROOT =====
+
+# 12^3 = 1728
+test "12 3 ^ f"  "1728"
+test "2 10 ^ p"  "1024"
+test "2 100 ^ p"  "1267650600228229401496703205376"
+test "2 0 ^ p"  "1"
+test "0 5 ^ p"  "0"
+test "0 0 ^ p"  "1"
+
+# Integer square root truncates: sqrt(456789) = 675
+test "456789 v f"  "675"
+test "2 v p"  "1"
+test "0 v p"  "0"
+
+# sqrt((12 + (-3)^4) / 11) - 22 = -20
+test "12 _3 4 ^ + 11 / v 22 - f"  "-20"
+
+# ===== STACK OPERATIONS =====
+
 # 3+3=6
 test "3 d + f"  "6"
 
-# 2-5=6
+# 7+7+7=21
+test "7 d d + + p"  "21"
+
+# 5-2=3 with swapped operands: 2-5=-3
 test "5 2 r - f"  "-3"
 
-# ===== NEW TESTS FOR ~ OPERATOR =====
+# Swap twice restores the original order
+test_stack "1 2 r r f"  "2" "1"
 
-# Basic ~ operator: 5/2 = 2 remainder 1
-test "5 2 ~ p"  "1"  # Top of stack should be remainder (1)
-test "5 2 ~ r p"  "2"  # After swap, should be quotient (2)
+# Clear then push
+test "5 c 3 p"  "3"
 
-# ~ operator with different numbers: 17/3 = 5 remainder 2
-test "17 3 ~ p"  "2"  # Remainder should be on top
-test "17 3 ~ r p"  "5"  # Quotient after swap
+# Printing an empty stack prints nothing
+test "f"  ""
+test "1 2 c f"  ""
 
-# ~ operator with negative numbers: -10/3 = -3 remainder -1
-test "_10 3 ~ p"  "-1"  # Remainder
-test "_10 3 ~ r p"  "-3"  # Quotient
+# ===== COMPACT NOTATION (no spaces between tokens) =====
 
-# ~ operator in complex expression
-test "10 3 ~ + p"  "4"  # 10/3 gives 3,1; 3+1=4
-test "20 3 ~ 2 * + p"  "10"  # 20/3=6,2; stack=[6,2]; 2*2=4; stack=[6,4]; 6+4=10
+test "2 3*4+p"  "10"
+test "12_3-p"  "15"   # 12 - (-3)
+test "10 2/p"  "5"
+test "5 5 +p"  "10"
+test "1 2+3*p"  "9"
 
-# Test both quotient and remainder are pushed
-test_stack "5 2 ~ f" "1" "2"
+# ===== COMMENTS (# to end of line) =====
 
-# ===== ERROR CONDITION TESTS =====
+test "5 5 + p # comment"  "10"
+test_lines "5"  '# just a comment\n5 p\n'
+
+# ===== MULTILINE INPUT =====
+# The stack persists across lines; an error on one line does not abort the session
+
+test_lines $'5\n1'  '1 2\n3 + f\n'
+test_lines "5"  '\n5 p\n'
+test_lines "5"  '1 +\n5 p\n'
+
+# ===== COMMAND LINE =====
+
+test_e "2" -e "1 1 + p"
+test_e "2" -e "1 1" -e "+ p"   # multiple -e are concatenated
+test_e "2" --expression="1 1 + p"
+test_contains "rpn 0.1" -V
+test_contains "rpn 0.1" --version
+test_contains "Usage:" -h
+test_contains "Usage:" --help
+test_exit 0 -h
+test_exit 0 -V
+test_exit 1 -z   # unknown option
+
+# ===== ERROR CONDITIONS =====
+# All error messages go to stderr
 
 # Division by zero
 test_error "5 0 /"  "divide by zero"
+test_error "5 0 %"  "remainder by zero"
 test_error "10 0 ~"  "divide by zero"
 
 # Stack underflow
+test_error "p"  "stack empty"
+test_error "v"  "stack empty"
+test_error "d"  "stack empty"
+test_error "1 r"  "stack empty"
 test_error "1 +"  "stack empty"
-test_error "1 ~"  "stack empty"
+test_error "1 -"  "stack empty"
+test_error "1 *"  "stack empty"
+test_error "1 /"  "stack empty"
 test_error "1 %"  "stack empty"
+test_error "1 ~"  "stack empty"
+test_error "1 ^"  "stack empty"
 
-# ===== EDGE CASE TESTS =====
+# ===== INPUT BUFFER (io.c) =====
 
-# Zero division
-test "0 5 / p"  "0"
-test_stack "0 5 ~ f"  "0" "0"  # 0/5 = 0 remainder 0
+# Long lines force several flushes of the 16-byte input buffer
+test "12345678901234567890123456789012345678901234567890 1 + p"  "12345678901234567890123456789012345678901234567891"
+test "12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678 1 + p"  "12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345679"
 
-# One divided by one
-test "1 1 / p"  "1"
-test "1 1 ~ p"  "0"  # Remainder should be 0
+# A NUL byte must not overflow the input buffer: strlen() stops at the NUL,
+# which used to defeat the flush guard and write past the buffer
+tests_run=$((tests_run + 1))
+nul_result=$( { printf '5 5 + p\n1\x00'; printf 'A%.0s' $(seq 1 300); printf '\n'; } | ./rpn 2>/dev/null )
+if [ "$nul_result" != "10" ]; then
+    failures=$((failures + 1))
+    echo "FAIL NUL byte test: expected '10', got '$nul_result'"
+fi
 
-# Large numbers
-test "1000000000000 7 ~ + p"  "142857142858"  # Large division
+# ===== SUMMARY =====
 
-# ===== STACK OPERATION TESTS =====
-
-# Clear stack
-test "5 c 3 p"  "3"
-
-# ===== COMPLEX EXPRESSION TESTS =====
-
-# Multi-step calculation with ~
-test "10 3 ~ 2 * + p"  "5"  # 10/3=3,1; stack=[1,3] (remainder on top); 1*2=2; stack=[2,3]; 2+3=5
-
-# Mixed operations
-test "20 3 ~ 4 * 5 + p"  "13"  # 20/3=6,2; stack=[2,6]; 2*4=8; stack=[8,6]; 8+5=13
-
-# Sum 1 to 10
-test "1 2 3 4 5 6 7 8 9 10 + + + + + + + + + f"  "55"
-
-echo "All tests passed"
-exit 0
+if [ "$failures" -eq 0 ]; then
+    echo "All $tests_run tests passed"
+    exit 0
+else
+    echo "$failures of $tests_run tests failed"
+    exit 1
+fi

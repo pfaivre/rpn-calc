@@ -36,34 +36,39 @@ SOFTWARE.
 char *bufferedInput() {
     char *input = calloc(1,1);
     char *realloc_ptr = NULL;
-    char buffer[STDIN_BUFFER_SIZE] = {0};
+    char buffer[STDIN_BUFFER_SIZE];
     char c = 0;
     int count = 0;
+    size_t input_len = 0;
 
     while(!feof(stdin) && c != '\n') {
         c = getchar();
         buffer[count++] = c;
-        buffer[count] = '\0';
 
-        if (strlen(buffer) >= STDIN_BUFFER_SIZE - 1) {
-            realloc_ptr = realloc(input, strlen(input) + strlen(buffer) + 1);
+        // Flush by byte count: strlen() stops at a NUL byte in the input and
+        // would let count grow past the end of buffer
+        if (count >= STDIN_BUFFER_SIZE - 1) {
+            realloc_ptr = realloc(input, input_len + count + 1);
             if (!realloc_ptr)
                 return input;
             input = realloc_ptr;
 
-            strcat(input, buffer);
-            buffer[0] = '\0';
+            memcpy(input + input_len, buffer, count);
+            input_len += count;
+            input[input_len] = '\0';
             count = 0;
         }
     }
 
-    if (strlen(buffer) > 0) {
-        realloc_ptr = realloc(input, strlen(input) + strlen(buffer) + 1);
+    if (count > 0) {
+        realloc_ptr = realloc(input, input_len + count + 1);
         if (!realloc_ptr)
             return input;
         input = realloc_ptr;
 
-        strcat(input, buffer);
+        memcpy(input + input_len, buffer, count);
+        input_len += count;
+        input[input_len] = '\0';
     }
 
     return input;
