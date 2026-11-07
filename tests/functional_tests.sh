@@ -296,10 +296,13 @@ test_exit 1 -z   # unknown option
 # ===== ERROR CONDITIONS =====
 # All error messages go to stderr
 
-# Division by zero
+# Division by zero (operands stay on the stack, for /, % and ~ alike)
 test_error "5 0 /"  "divide by zero"
 test_error "5 0 %"  "remainder by zero"
 test_error "10 0 ~"  "divide by zero"
+test_error_stack "10 0 / f"  $'0\n10'  "divide by zero"
+test_error_stack "10 0 % f"  $'0\n10'  "remainder by zero"
+test_error_stack "10 0 ~ f"  $'0\n10'  "divide by zero"
 
 # Invalid operands: rejected with an error, operands kept on the stack
 test_error "2 _1 ^"  "negative exponent"

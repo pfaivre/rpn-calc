@@ -130,24 +130,19 @@ Stack _calc_proceed(Stack s, const char* command) {
         }
 
         // Division with remainder (dc-style ~ operator)
-        // This feature has been coded by an AI (devstral-2512)
         else if (strcmp(command, "~") == 0) {
             if (!stack_hasAtLeast(s, 2)) {
                 fputs("rpn: stack empty\n", stderr);
+                return s;
+            }
+            if (mpz_cmp_si(s->val, 0) == 0) {
+                fputs("rpn: divide by zero\n", stderr);
                 return s;
             }
             mpz_t a, b, quotient, remainder;
             s = stack_pop(s, &a);  // Pop divisor (top of stack)
             s = stack_pop(s, &b);  // Pop dividend (next on stack)
 
-            if (mpz_cmp_si(a, 0) == 0) {
-                fputs("rpn: divide by zero\n", stderr);
-                mpz_clear(a);
-                mpz_clear(b);
-                return s;
-            }
-
-            // Calculate both quotient and remainder efficiently
             mpz_init(quotient);
             mpz_init(remainder);
             mpz_tdiv_qr(quotient, remainder, b, a);
