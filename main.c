@@ -98,18 +98,14 @@ int main(int argc, char **argv) {
     else {
         char *input = NULL;
         Stack s = stack_init();
-        input = bufferedInput();
 
-        while (input && input[strlen(input)-1] != EOF) {
+        while ((input = bufferedInput()) != NULL) {
             s = calc_parse(s, input);
 
             free(input);
-
-            input = bufferedInput();
         }
 
         stack_delete(s);
-        free(input);
     }
     
     return 0;

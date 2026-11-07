@@ -256,6 +256,12 @@ test_lines $'5\n1'  '1 2\n3 + f\n'
 test_lines "5"  '\n5 p\n'
 test_lines "5"  '1 +\n5 p\n'
 
+# The last line is evaluated even without a trailing newline
+test_lines $'5\n6'  '5 p\n6 p'
+
+# Empty stdin: no output, clean exit
+test_lines ""  ''
+
 # ===== COMMAND LINE =====
 
 test_e "2" -e "1 1 + p"
@@ -303,6 +309,15 @@ nul_result=$( { printf '5 5 + p\n1\x00'; printf 'A%.0s' $(seq 1 300); printf '\n
 if [ "$nul_result" != "10" ]; then
     failures=$((failures + 1))
     echo "FAIL NUL byte test: expected '10', got '$nul_result'"
+fi
+
+# NUL-only input must terminate cleanly (used to read input[-1] and loop forever)
+tests_run=$((tests_run + 1))
+nul_only=$(printf '\x00' | timeout 5 ./rpn 2>/dev/null)
+nul_only_code=$?
+if [ "$nul_only_code" -ne 0 ] || [ -n "$nul_only" ]; then
+    failures=$((failures + 1))
+    echo "FAIL NUL-only input test: expected exit 0 and no output, got exit $nul_only_code, output '$nul_only'"
 fi
 
 # ===== SUMMARY =====

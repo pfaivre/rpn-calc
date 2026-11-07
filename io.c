@@ -29,21 +29,33 @@ SOFTWARE.
 #include "io.h"
 
 /**
- * Read the standard input until EOF or carriage return.
+ * Read one line from the standard input (until newline or EOF).
  * It can support an arbitrary amount of text.
  * TODO: Write directly in the input without the buffer
+ * @return A newly allocated string holding the line without its trailing
+ *         newline, an empty string for an empty line, or NULL at EOF
  */
 char *bufferedInput() {
     char *input = calloc(1,1);
     char *realloc_ptr = NULL;
     char buffer[STDIN_BUFFER_SIZE];
-    char c = 0;
+    int c;
     int count = 0;
     size_t input_len = 0;
 
-    while(!feof(stdin) && c != '\n') {
-        c = getchar();
-        buffer[count++] = c;
+    if (!input) {
+        fputs("Memory allocation error\n", stderr);
+        exit(1);
+    }
+
+    c = getchar();
+    if (c == EOF) {
+        free(input);
+        return NULL;
+    }
+
+    while (c != EOF && c != '\n') {
+        buffer[count++] = (char) c;
 
         // Flush by byte count: strlen() stops at a NUL byte in the input and
         // would let count grow past the end of buffer
@@ -58,6 +70,8 @@ char *bufferedInput() {
             input[input_len] = '\0';
             count = 0;
         }
+
+        c = getchar();
     }
 
     if (count > 0) {
