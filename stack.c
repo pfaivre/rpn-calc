@@ -22,8 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdckdint.h>
 
 #include <gmp.h>
 
@@ -34,44 +34,61 @@ SOFTWARE.
  * Creates a new empty Stack
  */
 Stack stack_init() {
-    return NULL; // Amazing
+    Stack s = malloc(sizeof(StructStack));
+    if (!s)
+        rpn_fatal("memory allocation error");
+
+    s->vals = NULL;
+    s->size = 0;
+    s->cap = 0;
+    return s;
 }
 
 /**
- * Append a value at the top of a stack
+ * Append a value at the top of a stack, growing the backing array as
+ * needed (doubling its capacity, with the byte size checked against
+ * overflow). Reallocating an array of mpz_t only moves the handles; the
+ * limbs they point to are allocated separately and stay valid.
  * @param s Stack to be completed
  * @param val value to add
- * @return the new top of the stack
+ * @return the same stack, with the new value on top
  */
 Stack stack_push(Stack s, mpz_t val) {
-    Stack n = (Stack) malloc(sizeof(StructStack));
+    if (s->size == s->cap) {
+        size_t newcap, bytes;
+        if (s->cap == 0)
+            newcap = 8;
+        else if (ckd_mul(&newcap, s->cap, (size_t) 2))
+            rpn_fatal("stack too large");
+        if (ckd_mul(&bytes, newcap, sizeof(mpz_t)))
+            rpn_fatal("stack too large");
 
-    if (!n)
-        rpn_fatal("memory allocation error");
+        mpz_t *grown = realloc(s->vals, bytes);
+        if (!grown)
+            rpn_fatal("memory allocation error");
+        s->vals = grown;
+        s->cap = newcap;
+    }
 
-    mpz_init_set(n->val, val);
-    n->below = s;
-
-    return n;
+    mpz_init_set(s->vals[s->size], val);
+    s->size++;
+    return s;
 }
 
 /**
  * Take the value at the top of the stack
  * @param s Stack to take the value from
- * @param val pointer to store the taken value
- * @return the new top of the stack
+ * @param val pointer to store the taken value (initialized by this call)
+ * @return the same stack, without the former top value
  */
 Stack stack_pop(Stack s, mpz_t *val) {
-    Stack below = NULL;
-
-    if (s) {
-        mpz_init_set(*val, s->val);
-        below = s->below;
-        mpz_clear(s->val);
-        free(s);
+    if (s->size > 0) {
+        s->size--;
+        mpz_init_set(*val, s->vals[s->size]);
+        mpz_clear(s->vals[s->size]);
     }
 
-    return below;
+    return s;
 }
 
 /**
@@ -79,31 +96,32 @@ Stack stack_pop(Stack s, mpz_t *val) {
  * @return true if the is n or more elements in the stack
  */
 bool stack_hasAtLeast(Stack s, int n) {
-    int count = 0;
+    return n <= 0 || s->size >= (size_t) n;
+}
 
-    while (s != NULL && count < n) {
-        s = s->below;
-        count++;
-    }
-
-    return count >= n;
+/**
+ * Remove all values from the stack, keeping the (now empty) stack usable
+ * @param s The stack to clear
+ * @return the same stack, empty
+ */
+Stack stack_clear(Stack s) {
+    for (size_t i = 0; i < s->size; i++)
+        mpz_clear(s->vals[i]);
+    s->size = 0;
+    return s;
 }
 
 /**
  * Free all the space occupied by the stack
- * @param s The stack to free. Note that all of the chained elements will be
- *          freed as well
+ * @param s The stack to free
+ * @return NULL
  */
 Stack stack_delete(Stack s) {
-    Stack below = NULL;
+    if (!s)
+        return NULL;
 
-    while (s) {
-        below = s->below;
-        mpz_clear(s->val);
-        free(s);
-        s = below;
-    }
-
-    return s;
+    s = stack_clear(s);
+    free(s->vals);
+    free(s);
+    return NULL;
 }
-

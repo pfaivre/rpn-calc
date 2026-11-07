@@ -25,18 +25,27 @@ SOFTWARE.
 #ifndef STACK_H
 #define STACK_H
 
+#include <stddef.h>
+
 #include <gmp.h>
 
 /**
- * An implementation of a stack as a FILO linked list.
- * A stack can be accessed by a pointer to its higest element.
+ * A stack of arbitrary-precision integers backed by a dynamically growing
+ * array: vals[0] is the bottom of the stack, vals[size-1] the top.
  */
 typedef struct StructStack {
-    mpz_t val;
-    struct StructStack* below;
+    mpz_t *vals;
+    size_t size;
+    size_t cap;
 } StructStack;
 
 typedef StructStack* Stack;
+
+/** The top element of the stack (only valid when the stack is non-empty) */
+#define STACK_TOP(s) ((s)->vals[(s)->size - 1])
+
+/** The element just below the top (only valid with at least two elements) */
+#define STACK_SECOND(s) ((s)->vals[(s)->size - 2])
 
 Stack stack_init();
 
@@ -46,7 +55,8 @@ Stack stack_init();
 
 bool stack_hasAtLeast(Stack, int);
 
+[[nodiscard]] Stack stack_clear(Stack);
+
 [[nodiscard]] Stack stack_delete(Stack);
 
 #endif
-
