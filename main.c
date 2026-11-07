@@ -108,6 +108,6 @@ int main(int argc, char **argv) {
         stack_delete(s);
     }
     
-    return 0;
+    return calc_had_error() ? 1 : 0;
 }
 

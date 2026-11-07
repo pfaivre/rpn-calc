@@ -142,6 +142,24 @@ function test_exit ()
     fi
 }
 
+# test_exit_stdin EXPECTED_CODE EXPECTED_STDOUT INPUT -- stdin run checks both exit code and stdout
+function test_exit_stdin ()
+{
+    local expected_code=$1
+    local expected_result=$2
+    local input=$3
+    local result code
+
+    tests_run=$((tests_run + 1))
+    result=$(printf '%b' "$input" | ./rpn 2>/dev/null)
+    code=$?
+
+    if [ "$code" != "$expected_code" ] || [ "$result" != "$expected_result" ]; then
+        failures=$((failures + 1))
+        echo "FAIL lines '$input': expected exit $expected_code and stdout '$expected_result', got exit $code, stdout '$result'"
+    fi
+}
+
 
 # ===== ARITHMETIC =====
 
@@ -294,7 +312,11 @@ test_exit 0 -V
 test_exit 1 -z   # unknown option
 
 # ===== ERROR CONDITIONS =====
-# All error messages go to stderr
+# All error messages go to stderr and make the process exit non-zero;
+# the session itself keeps running, so later lines are still evaluated
+
+# Unimplemented command
+test_error "z"  "unimplemented"
 
 # Division by zero (operands stay on the stack, for /, % and ~ alike)
 test_error "5 0 /"  "divide by zero"
@@ -322,6 +344,25 @@ test_error "1 /"  "stack empty"
 test_error "1 %"  "stack empty"
 test_error "1 ~"  "stack empty"
 test_error "1 ^"  "stack empty"
+
+# ===== EXIT CODES =====
+
+# Clean runs exit 0
+test_exit 0 -e "1 1 + p"
+test_exit_stdin 0 "10"  '5 5 + p\n'
+
+# Any runtime error makes the process exit 1
+test_exit 1 -e "1 0 /"
+test_exit 1 -e "z"
+test_exit_stdin 1 ""  '5 0 /\n'
+test_exit_stdin 1 ""  '5 0 %\n'
+test_exit_stdin 1 ""  '10 0 ~\n'
+test_exit_stdin 1 ""  '1 +\n'
+test_exit_stdin 1 ""  '2 _1 ^\n'
+test_exit_stdin 1 ""  '_4 v\n'
+
+# ...but the session continues after an error
+test_exit_stdin 1 "5"  '1 +\n5 p\n'
 
 # ===== INPUT BUFFER (io.c) =====
 
