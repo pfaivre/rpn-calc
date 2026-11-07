@@ -160,6 +160,22 @@ function test_exit_stdin ()
     fi
 }
 
+# test_bytes INPUT HEX -- feeds INPUT (printf '%b' escapes) and compares raw stdout bytes as hex, for output containing NUL bytes ($() would drop them)
+function test_bytes ()
+{
+    local input=$1
+    local expected_hex=$2
+    local result
+
+    tests_run=$((tests_run + 1))
+    result=$(printf '%b' "$input" | ./rpn 2>/dev/null | od -An -tx1 | tr -d ' \n')
+
+    if [ "$result" != "$expected_hex" ]; then
+        failures=$((failures + 1))
+        echo "FAIL bytes '$input': expected hex '$expected_hex', got '$result'"
+    fi
+}
+
 
 # ===== ARITHMETIC =====
 
@@ -304,6 +320,9 @@ test "4276803 P"  "ABC"       # 0x414243
 test "_72 P"  "H"             # absolute value
 test "18496 P"  "H@"          # 0x4840
 test_error "P"  "stack underflow"
+# 0 prints as a single NUL byte, as in dc (byte-level check: $() drops NULs)
+test_bytes '0 P\n'  "00"
+test_bytes '26952 P\n'  "6948"
 
 # ===== COMPACT NOTATION (no spaces between tokens) =====
 
@@ -315,6 +334,9 @@ test "1 2+3*p"  "9"
 test "65n"  "65"
 test "72P"  "H"
 
+# A lone underscore parses as 0, as in dc
+test "_ p"  "0"
+
 # Tabs separate tokens too
 test_lines "3"  '1\t2 + p\n'
 
@@ -322,6 +344,8 @@ test_lines "3"  '1\t2 + p\n'
 
 test "5 5 + p # comment"  "10"
 test_lines "5"  '# just a comment\n5 p\n'
+# A comment starts mid-token: 5#c leaves the 5 on the stack, the rest of the line is ignored
+test_lines "5"  '5#c\np\n'
 
 # ===== MULTILINE INPUT =====
 # The stack persists across lines; an error on one line does not abort the session

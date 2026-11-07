@@ -22,21 +22,21 @@ The build system compiles C code using GCC with C99 standard and includes GMP li
 - Use clear, descriptive comments for functions and complex logic
 
 ### Naming Conventions
-- **Functions**: Use snake_case (e.g., `_calc_proceed`, `stack_push`)
+- **Functions**: Use snake_case (e.g., `_calc_binary_op`, `stack_push`); a few legacy helpers predate this rule and keep their camelCase names (e.g., `_calc_proceed`, `bufferedInput`)
 - **Variables**: Use snake_case (e.g., `mpz_t number`, `Stack s`)
 - **Constants**: Use UPPER_CASE (e.g., `STDIN_BUFFER_SIZE`)
 - **Types**: Use CamelCase for structs (e.g., `StructStack`), typedefs use the struct name (e.g., `Stack`)
-- **Private functions**: Prefix with underscore (e.g., `_calc_tokenThreshold`)
+- **Private functions**: Prefix with underscore and keep them `static` (e.g., `_calc_binary_op`); declare only the public API in headers
 
 ### Formatting
-- Indentation: Use tabs (4 spaces equivalent)
+- Indentation: 4 spaces in C source; tabs in the makefile (required by make)
 - Braces: Opening brace on same line, closing brace on new line
 - Spacing: Use spaces around operators, after commas
 - Line length: No strict limit, but keep lines reasonable (< 100 chars recommended)
 
 ### Error Handling
 - Check for NULL pointers and memory allocation failures
-- Use `fputs()` for error messages to stderr
+- Use `fputs()` for fixed error messages to stderr (`fprintf()` when the message is formatted)
 - Exit with non-zero status on critical errors
 - For stack operations, check minimum required elements before operations
 

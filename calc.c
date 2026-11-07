@@ -60,7 +60,7 @@ typedef void (*MpzBinop)(mpz_t, const mpz_t, const mpz_t);
  * @param op The mpz operation to apply (e.g. mpz_add)
  * @return The top of the stack after the operation
  */
-static Stack _calc_binaryOp(Stack s, MpzBinop op) {
+static Stack _calc_binary_op(Stack s, MpzBinop op) {
     if (!stack_hasAtLeast(s, 2)) {
         _calc_error("stack underflow");
         return s;
@@ -80,7 +80,7 @@ static Stack _calc_binaryOp(Stack s, MpzBinop op) {
  * @param err Error message used when the divisor is zero
  * @return The top of the stack after the operation
  */
-static Stack _calc_divOp(Stack s, MpzBinop op, const char *err) {
+static Stack _calc_div_op(Stack s, MpzBinop op, const char *err) {
     if (!stack_hasAtLeast(s, 2)) {
         _calc_error("stack underflow");
         return s;
@@ -103,7 +103,7 @@ static Stack _calc_divOp(Stack s, MpzBinop op, const char *err) {
  * an instruction)
  * @return The top of the stack after performing the command
  */
-Stack _calc_proceed(Stack s, const char* command) {
+static Stack _calc_proceed(Stack s, const char* command) {
     // A number
     if (isdigit((unsigned char) command[0]) || command[0] == '_') {
         mpz_t number;
@@ -124,15 +124,15 @@ Stack _calc_proceed(Stack s, const char* command) {
 
     // Arithmetic operators
     if (strcmp(command, "+") == 0)
-        return _calc_binaryOp(s, mpz_add);
+        return _calc_binary_op(s, mpz_add);
     if (strcmp(command, "-") == 0)
-        return _calc_binaryOp(s, mpz_sub);
+        return _calc_binary_op(s, mpz_sub);
     if (strcmp(command, "*") == 0)
-        return _calc_binaryOp(s, mpz_mul);
+        return _calc_binary_op(s, mpz_mul);
     if (strcmp(command, "/") == 0)
-        return _calc_divOp(s, mpz_tdiv_q, "divide by zero");
+        return _calc_div_op(s, mpz_tdiv_q, "divide by zero");
     if (strcmp(command, "%") == 0)
-        return _calc_divOp(s, mpz_tdiv_r, "remainder by zero");
+        return _calc_div_op(s, mpz_tdiv_r, "remainder by zero");
 
     // Division with remainder (dc-style ~ operator)
     if (strcmp(command, "~") == 0) {
@@ -245,19 +245,22 @@ Stack _calc_proceed(Stack s, const char* command) {
             _calc_error("stack underflow");
             return s;
         }
-        mpz_t a, byte;
+        mpz_t a;
         s = stack_pop(s, &a);
-        mpz_init(byte);
         mpz_abs(a, a);
-        unsigned long nbytes = (mpz_sizeinbase(a, 2) + 7) / 8;
-        if (nbytes == 0)
-            nbytes = 1;  // zero prints as a single NUL byte, as in dc
-        for (unsigned long i = nbytes; i-- > 0; ) {
-            mpz_fdiv_q_2exp(byte, a, 8 * i);
-            mpz_fdiv_r_2exp(byte, byte, 8);
-            putchar((int) mpz_get_ui(byte));
+        size_t nbytes = mpz_sizeinbase(a, 256);  // at least 1, even for zero
+        unsigned char *bytes = malloc(nbytes);
+        if (!bytes) {
+            fputs("Memory allocation error\n", stderr);
+            exit(1);
         }
-        mpz_clear(byte);
+        size_t count = 0;
+        mpz_export(bytes, &count, 1, 1, 1, 0, a);
+        if (count == 0)
+            putchar(0);  // zero prints as a single NUL byte, as in dc
+        else
+            fwrite(bytes, 1, count, stdout);
+        free(bytes);
         mpz_clear(a);
         return s;
     }
@@ -303,7 +306,7 @@ Stack _calc_proceed(Stack s, const char* command) {
 /**
  * Detects if the two chars belong to different commands
  */
-bool _calc_tokenThreshold(char c1, char c2) {
+static bool _calc_tokenThreshold(char c1, char c2) {
     // digit or minus sign (_) followed by an other digit
     if ((c1 == '_' || (c1 >= '0' && c1 <= '9'))
         && (c2 >= '0' && c2 <= '9'))
@@ -318,7 +321,7 @@ bool _calc_tokenThreshold(char c1, char c2) {
  * @param str String to search the element on (operator, operand or command)
  * @return Pointer to str after the extracted token
  */
-char *_calc_firstToken(char *token, char *str) {
+static char *_calc_firstToken(char *token, char *str) {
     int i = 0;
 
     if (!token)

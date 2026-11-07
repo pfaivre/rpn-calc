@@ -1,7 +1,7 @@
 CC		= gcc
 OBJS	= main.o calc.o stack.o io.o
 STD		= c99
-CFLAGS	= -c -g -Wall -pedantic -std=$(STD)
+CFLAGS	= -c -g -Wall -pedantic -std=$(STD) -MMD -MP
 LDFLAGS	= -lgmp
 PGM		= rpn
 
@@ -13,11 +13,11 @@ $(PGM):	$(OBJS)
 %.o:	%.c
 		$(CC) $(CFLAGS) $<
 
-$(OBJS): calc.h stack.h io.h
+-include $(OBJS:.o=.d)
 
 clean:
 		rm -f $(PGM)
-		rm -f $(OBJS)
+		rm -f $(OBJS) $(OBJS:.o=.d)
 
 # For development
 

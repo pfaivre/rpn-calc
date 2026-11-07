@@ -29,12 +29,6 @@ SOFTWARE.
 
 #include "stack.h"
 
-Stack _calc_proceed(Stack s, const char* command);
-
-bool _calc_tokenThreshold(char c1, char c2);
-
-char *_calc_firstToken(char *token, char *str);
-
 Stack calc_parse(Stack s, char* string);
 
 bool calc_had_error();
