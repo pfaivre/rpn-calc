@@ -42,10 +42,10 @@ typedef struct StructStack {
 typedef StructStack* Stack;
 
 /** The top element of the stack (only valid when the stack is non-empty) */
-#define STACK_TOP(s) ((s)->vals[(s)->size - 1])
+static inline mpz_ptr stack_top(Stack s) { return s->vals[s->size - 1]; }
 
 /** The element just below the top (only valid with at least two elements) */
-#define STACK_SECOND(s) ((s)->vals[(s)->size - 2])
+static inline mpz_ptr stack_second(Stack s) { return s->vals[s->size - 2]; }
 
 Stack stack_init();
 
@@ -57,6 +57,6 @@ bool stack_hasAtLeast(Stack, int);
 
 [[nodiscard]] Stack stack_clear(Stack);
 
-[[nodiscard]] Stack stack_delete(Stack);
+Stack stack_delete(Stack);
 
 #endif

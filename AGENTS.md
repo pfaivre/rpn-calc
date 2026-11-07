@@ -127,7 +127,7 @@ Write new code as if it will be audited against these rubrics:
 
 - The project uses GMP (GNU Multiple Precision Arithmetic Library)
 - Negative numbers are represented with underscore prefix (e.g., `_5`)
-- The calculator supports basic RPN operations: +, -, *, /, %, ~, ^, v, c, p, f, d, r
+- The calculator supports basic RPN operations: +, -, *, /, %, ~, ^, v, c, p, n, P, f, d, r
 - Error messages are written to stderr
 - The codebase follows defensive programming practices
 

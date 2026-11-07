@@ -2,9 +2,9 @@ name: Build and test
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "master", "c23" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "master", "c23" ]
 
 jobs:
   build:
@@ -12,7 +12,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    # pinned to the v4.2.2 commit, not the moving v4 tag
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
     - name: install dependencies
       run: sudo apt install -y libgmp-dev cppcheck
@@ -25,3 +26,19 @@ jobs:
 
     - name: run tests
       run: make test
+
+  sanitize:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+    - name: install dependencies
+      run: sudo apt install -y libgmp-dev libasan8 libubsan1
+
+    - name: build with address/UB sanitizers
+      run: gcc -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -std=c23 -Wall -pedantic -o rpn main.c calc.c stack.c io.c -lgmp
+
+    - name: run tests under sanitizers
+      run: ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 bash tests/functional_tests.sh

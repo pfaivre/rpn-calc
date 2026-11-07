@@ -49,10 +49,10 @@ SOFTWARE.
 
 int main(int argc, char **argv) {
     char *expression = NULL;
-    char option;
 
     while (1) {
         int option_index = 0;
+        char option;
         static struct option long_options[] = {
             {"expression", required_argument, 0, 'e'},
             {"help",       no_argument,       0, 'h'},
@@ -98,7 +98,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    s = stack_delete(s);
+    stack_delete(s);
     return calc_had_error() ? 1 : 0;
 }
 

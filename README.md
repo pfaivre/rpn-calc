@@ -44,7 +44,8 @@ Without `-e`, expressions are read from the standard input, one per line; the
 stack persists across lines. Spaces, tabs and newlines separate tokens, and
 spaces may be omitted between tokens (`2 3*4+p`). Negative numbers are written
 with an underscore prefix (`_5`). A `#` starts a comment that runs to the end
-of the line.
+of the line. A NUL byte ends the line for the parser: everything after the
+first NUL byte is ignored.
 
 The exit status is 0 when every command succeeded, and 1 if any command failed
 (errors are reported on stderr) or an unknown option was given.
