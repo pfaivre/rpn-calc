@@ -1,7 +1,7 @@
 /**
 MIT License
 
-Copyright (c) 2016-2023 Pierre Faivre
+Copyright (c) 2016-2026 Pierre Faivre
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -89,11 +89,14 @@ bool stack_isEmpty(Stack s) {
  * @return true if the is n or more elements in the stack
  */
 bool stack_hasAtLeast(Stack s, int n) {
-    while (s != NULL && (n-- > 0)) {
+    int count = 0;
+
+    while (s != NULL && count < n) {
         s = s->below;
+        count++;
     }
 
-    return n <= 0;
+    return count >= n;
 }
 
 /**

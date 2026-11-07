@@ -22,21 +22,21 @@ The build system compiles C code using GCC with C99 standard and includes GMP li
 - Use clear, descriptive comments for functions and complex logic
 
 ### Naming Conventions
-- **Functions**: Use snake_case (e.g., `_calc_proceed`, `stack_push`)
+- **Functions**: Use snake_case (e.g., `_calc_binary_op`, `stack_push`); a few legacy helpers predate this rule and keep their camelCase names (e.g., `_calc_proceed`, `bufferedInput`)
 - **Variables**: Use snake_case (e.g., `mpz_t number`, `Stack s`)
 - **Constants**: Use UPPER_CASE (e.g., `STDIN_BUFFER_SIZE`)
 - **Types**: Use CamelCase for structs (e.g., `StructStack`), typedefs use the struct name (e.g., `Stack`)
-- **Private functions**: Prefix with underscore (e.g., `_calc_tokenThreshold`)
+- **Private functions**: Prefix with underscore and keep them `static` (e.g., `_calc_binary_op`); declare only the public API in headers
 
 ### Formatting
-- Indentation: Use tabs (4 spaces equivalent)
+- Indentation: 4 spaces in C source; tabs in the makefile (required by make)
 - Braces: Opening brace on same line, closing brace on new line
 - Spacing: Use spaces around operators, after commas
 - Line length: No strict limit, but keep lines reasonable (< 100 chars recommended)
 
 ### Error Handling
 - Check for NULL pointers and memory allocation failures
-- Use `fputs()` for error messages to stderr
+- Use `fputs()` for fixed error messages to stderr (`fprintf()` when the message is formatted)
 - Exit with non-zero status on critical errors
 - For stack operations, check minimum required elements before operations
 
@@ -67,9 +67,7 @@ The build system compiles C code using GCC with C99 standard and includes GMP li
 
 ## Testing
 
-The project uses Travis CI for continuous integration:
-- **Test command**: `make clean && make check && make`
-- **Static analysis**: `cppcheck -q --std=c99 *.c *.h`
+The project uses Github Workflows for continuous integration.
 
 There are no unit tests in the traditional sense. Testing is done through:
 1. Manual testing of the compiled binary
@@ -80,8 +78,41 @@ There are no unit tests in the traditional sense. Testing is done through:
 
 1. **Build**: Run `make` to compile
 2. **Test**: Run `make check` for static analysis
-3. **Run**: Execute `./rpn` with appropriate arguments
-4. **Memory check**: Run `make valgrind` to check for memory issues
+3. **Test**: Run `make test` for functional testing
+4. **Run**: Execute `./rpn` with appropriate arguments
+5. **Memory check**: Run valgrind to check for memory issues. Example: `valgrind ./rpn -e "12 _3 4 ^ + 11 / v 22 - f"`
+
+## Review principles (thermos)
+
+Branch audits run a bug/security pass and a code-quality pass over the diff.
+Write new code as if it will be audited against these rubrics:
+
+- Be ambitious about simplification ("code judo"): prefer the restructure
+  that deletes whole branches, helpers, modes, or layers over one that merely
+  moves the same complexity around. If a path exists to remove complexity
+  rather than rearrange it, take it.
+- No spaghetti growth: ad-hoc conditionals or one-off special cases bolted
+  onto unrelated flows are a design problem, not a stylistic nit — push the
+  logic into a dedicated helper, state machine, policy object, or module.
+- Type and boundary cleanliness: no unnecessary `Option`, `any`, or casts
+  where a clearer type boundary exists; explicit typed models over
+  loosely-shaped ad-hoc objects; no silent fallbacks papering over unclear
+  invariants.
+- Keep logic in its canonical layer: no feature-specific code leaking into
+  shared paths, no bespoke one-offs where a canonical helper already exists,
+  and related state updates atomic rather than spread across a flow.
+- Correctness first: no panics on user-controlled input; error paths return
+  `Result` and are handled at the boundary; every behavior change is
+  deliberate and covered by a test.
+- "It works" is not approval. Presumptive blockers unless justified: a file
+  pushed from under to over 1k lines, scattered feature checks in shared
+  code, an added indirection layer that clarifies nothing, duplicated logic
+  instead of an extracted helper.
+- Do not let changes push a file from under 1k lines to over 1k lines without
+  a very strong reason. Prefer extracting helpers, subcomponents, modules, or
+  local abstractions. If the diff crosses that threshold, explicitly ask whether
+  the code should be decomposed first. Only waive this with a compelling
+  structural reason where the file is still clearly organized.
 
 ## Project Structure
 
@@ -95,7 +126,7 @@ There are no unit tests in the traditional sense. Testing is done through:
 
 - The project uses GMP (GNU Multiple Precision Arithmetic Library)
 - Negative numbers are represented with underscore prefix (e.g., `_5`)
-- The calculator supports basic RPN operations: +, -, *, /, %, ^, v, c, p, f, d, r
+- The calculator supports basic RPN operations: +, -, *, /, %, ~, ^, v, c, p, f, d, r
 - Error messages are written to stderr
 - The codebase follows defensive programming practices
 
@@ -107,4 +138,4 @@ There are no unit tests in the traditional sense. Testing is done through:
 4. Add appropriate error handling
 5. Document new functions with Javadoc-style comments
 6. Run static analysis before committing changes
-7. Test manually with various RPN expressions
+7. Always test the program using tests/functional_tests.sh

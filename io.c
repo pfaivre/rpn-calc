@@ -1,7 +1,7 @@
 /**
 MIT License
 
-Copyright (c) 2016-2023 Pierre Faivre
+Copyright (c) 2016-2026 Pierre Faivre
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -29,41 +29,64 @@ SOFTWARE.
 #include "io.h"
 
 /**
- * Read the standard input until EOF or carriage return.
+ * Read one line from the standard input (until newline or EOF).
  * It can support an arbitrary amount of text.
  * TODO: Write directly in the input without the buffer
+ * @return A newly allocated string holding the line without its trailing
+ *         newline, an empty string for an empty line, or NULL at EOF
  */
 char *bufferedInput() {
     char *input = calloc(1,1);
     char *realloc_ptr = NULL;
-    char buffer[STDIN_BUFFER_SIZE] = {0};
-    char c = 0;
+    char buffer[STDIN_BUFFER_SIZE];
+    int c;
     int count = 0;
+    size_t input_len = 0;
 
-    while(!feof(stdin) && c != '\n') {
-        c = getchar();
-        buffer[count++] = c;
-        buffer[count] = '\0';
-
-        if (strlen(buffer) >= STDIN_BUFFER_SIZE - 1) {
-            realloc_ptr = realloc(input, strlen(input) + strlen(buffer) + 1);
-            if (!realloc_ptr)
-                return input;
-            input = realloc_ptr;
-
-            strcat(input, buffer);
-            buffer[0] = '\0';
-            count = 0;
-        }
+    if (!input) {
+        fputs("Memory allocation error\n", stderr);
+        exit(1);
     }
 
-    if (strlen(buffer) > 0) {
-        realloc_ptr = realloc(input, strlen(input) + strlen(buffer) + 1);
-        if (!realloc_ptr)
-            return input;
+    c = getchar();
+    if (c == EOF) {
+        free(input);
+        return NULL;
+    }
+
+    while (c != EOF && c != '\n') {
+        buffer[count++] = (char) c;
+
+        // Flush by byte count: strlen() stops at a NUL byte in the input and
+        // would let count grow past the end of buffer
+        if (count >= STDIN_BUFFER_SIZE - 1) {
+            realloc_ptr = realloc(input, input_len + count + 1);
+            if (!realloc_ptr) {
+                fputs("Memory allocation error\n", stderr);
+                exit(1);
+            }
+            input = realloc_ptr;
+
+            memcpy(input + input_len, buffer, count);
+            input_len += count;
+            input[input_len] = '\0';
+            count = 0;
+        }
+
+        c = getchar();
+    }
+
+    if (count > 0) {
+        realloc_ptr = realloc(input, input_len + count + 1);
+        if (!realloc_ptr) {
+            fputs("Memory allocation error\n", stderr);
+            exit(1);
+        }
         input = realloc_ptr;
 
-        strcat(input, buffer);
+        memcpy(input + input_len, buffer, count);
+        input_len += count;
+        input[input_len] = '\0';
     }
 
     return input;

@@ -1,7 +1,7 @@
 /**
 MIT License
 
-Copyright (c) 2016-2023 Pierre Faivre
+Copyright (c) 2016-2026 Pierre Faivre
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -98,20 +98,16 @@ int main(int argc, char **argv) {
     else {
         char *input = NULL;
         Stack s = stack_init();
-        input = bufferedInput();
 
-        while (input && input[strlen(input)-1] != EOF) {
+        while ((input = bufferedInput()) != NULL) {
             s = calc_parse(s, input);
 
             free(input);
-
-            input = bufferedInput();
         }
 
         stack_delete(s);
-        free(input);
     }
     
-    return 0;
+    return calc_had_error() ? 1 : 0;
 }
 
