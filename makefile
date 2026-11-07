@@ -22,7 +22,7 @@ clean:
 # For development
 
 check:
-		cppcheck -q --error-exitcode=1 --std=$(STD) *.c *.h
+		cppcheck -q --error-exitcode=1 *.c *.h
 
 valgrind: $(PGM)
 		valgrind ./$(PGM)

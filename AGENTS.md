@@ -11,7 +11,7 @@ The project uses a simple Makefile-based build system:
 - **Static analysis**: `make check` (uses cppcheck)
 - **Run with valgrind**: `make valgrind`
 
-The build system compiles C code using GCC with the C23 standard and includes GMP library for arbitrary precision arithmetic.
+The build system compiles C code using GCC 14 or newer with the C23 standard and includes GMP library for arbitrary precision arithmetic.
 
 ## Code Style Guidelines
 

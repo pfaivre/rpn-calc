@@ -2,9 +2,9 @@ name: Build and test
 
 on:
   push:
-    branches: [ "master", "c23" ]
+    branches: [ "master" ]
   pull_request:
-    branches: [ "master", "c23" ]
+    branches: [ "master" ]
 
 jobs:
   build:
@@ -15,17 +15,18 @@ jobs:
     # pinned to the v4.2.2 commit, not the moving v4 tag
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
+    # ubuntu-latest ships GCC 13, which has no -std=c23; C23 needs GCC 14+
     - name: install dependencies
-      run: sudo apt install -y libgmp-dev cppcheck
+      run: sudo apt install -y gcc-14 libgmp-dev cppcheck
 
     - name: make
-      run: make
+      run: make CC=gcc-14
 
     - name: make check
       run: make check
 
     - name: run tests
-      run: make test
+      run: make CC=gcc-14 test
 
   sanitize:
 
@@ -35,10 +36,10 @@ jobs:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
     - name: install dependencies
-      run: sudo apt install -y libgmp-dev libasan8 libubsan1
+      run: sudo apt install -y gcc-14 libgmp-dev libasan8 libubsan1
 
     - name: build with address/UB sanitizers
-      run: gcc -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -std=c23 -Wall -pedantic -o rpn main.c calc.c stack.c io.c -lgmp
+      run: gcc-14 -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -std=c23 -Wall -pedantic -o rpn main.c calc.c stack.c io.c -lgmp
 
     - name: run tests under sanitizers
       run: ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 bash tests/functional_tests.sh
