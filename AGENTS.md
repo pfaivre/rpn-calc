@@ -11,13 +11,14 @@ The project uses a simple Makefile-based build system:
 - **Static analysis**: `make check` (uses cppcheck)
 - **Run with valgrind**: `make valgrind`
 
-The build system compiles C code using GCC with C99 standard and includes GMP library for arbitrary precision arithmetic.
+The build system compiles C code using GCC 14 or newer with the C23 standard and includes GMP library for arbitrary precision arithmetic.
 
 ## Code Style Guidelines
 
 ### General C Style
-- Follow C99 standard
-- Use GCC compiler flags: `-Wall -pedantic -std=c99`
+- Follow the C23 standard
+- Use GCC compiler flags: `-Wall -pedantic -std=c23`
+- Use C23 facilities where they help: checked arithmetic from `<stdckdint.h>` for every size computation that feeds an allocation, and the standard attributes `[[nodiscard]]` (results that must be used) and `[[noreturn]]` (fatal error helpers)
 - Include MIT License header in all source files
 - Use clear, descriptive comments for functions and complex logic
 
@@ -126,7 +127,7 @@ Write new code as if it will be audited against these rubrics:
 
 - The project uses GMP (GNU Multiple Precision Arithmetic Library)
 - Negative numbers are represented with underscore prefix (e.g., `_5`)
-- The calculator supports basic RPN operations: +, -, *, /, %, ~, ^, v, c, p, f, d, r
+- The calculator supports basic RPN operations: +, -, *, /, %, ~, ^, v, c, p, n, P, f, d, r
 - Error messages are written to stderr
 - The codebase follows defensive programming practices
 

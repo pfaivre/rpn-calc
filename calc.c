@@ -22,16 +22,22 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdckdint.h>
 
 #include <gmp.h>
 
 #include "calc.h"
+#include "io.h"
 #include "stack.h"
+
+/* Maximum size of a ^ result, in bits (32 MiB). Beyond this, mpz_pow_ui
+ * risks exhausting memory and GMP aborts on allocation failure, so the
+ * exponent is rejected up front with a graceful error instead. */
+#define MAX_POW_BITS ((size_t) 1 << 28)
 
 static bool _calc_errorFlag = false;
 
@@ -67,7 +73,7 @@ static Stack _calc_binary_op(Stack s, MpzBinop op) {
     }
     mpz_t a;
     s = stack_pop(s, &a);
-    op(s->val, s->val, a);
+    op(stack_top(s), stack_top(s), a);
     mpz_clear(a);
     return s;
 }
@@ -85,13 +91,13 @@ static Stack _calc_div_op(Stack s, MpzBinop op, const char *err) {
         _calc_error("stack underflow");
         return s;
     }
-    if (mpz_cmp_si(s->val, 0) == 0) {
+    if (mpz_cmp_si(stack_top(s), 0) == 0) {
         _calc_error(err);
         return s;
     }
     mpz_t a;
     s = stack_pop(s, &a);
-    op(s->val, s->val, a);
+    op(stack_top(s), stack_top(s), a);
     mpz_clear(a);
     return s;
 }
@@ -140,7 +146,7 @@ static Stack _calc_proceed(Stack s, const char* command) {
             _calc_error("stack underflow");
             return s;
         }
-        if (mpz_cmp_si(s->val, 0) == 0) {
+        if (mpz_cmp_si(stack_top(s), 0) == 0) {
             _calc_error("divide by zero");
             return s;
         }
@@ -172,9 +178,22 @@ static Stack _calc_proceed(Stack s, const char* command) {
         // A positive exponent that does not fit in an unsigned long cannot
         // be computed; reject it before popping so the operands stay on the
         // stack (dc reports "exponent too large in raise")
-        if (mpz_sgn(s->val) > 0 && !mpz_fits_ulong_p(s->val)) {
+        if (mpz_sgn(stack_top(s)) > 0 && !mpz_fits_ulong_p(stack_top(s))) {
             _calc_error("exponent too large in raise");
             return s;
+        }
+        // Cap the result size: base^exp has about exp * bits(base) bits, and
+        // beyond MAX_POW_BITS GMP would attempt a huge allocation and abort
+        // on failure. Bases 0 and +-1 are exact for any exponent and stay
+        // instant. Checked before popping so the operands stay on the stack.
+        if (mpz_sgn(stack_top(s)) > 0 && mpz_cmpabs_ui(stack_second(s), 1) > 0) {
+            size_t result_bits;
+            if (ckd_mul(&result_bits, (size_t) mpz_get_ui(stack_top(s)),
+                        mpz_sizeinbase(stack_second(s), 2))
+                || result_bits > MAX_POW_BITS) {
+                _calc_error("exponent too large in raise");
+                return s;
+            }
         }
         mpz_t a;
         s = stack_pop(s, &a);
@@ -182,14 +201,14 @@ static Stack _calc_proceed(Stack s, const char* command) {
             // Negative exponent
             // at the default scale 0 that is the truncation toward zero of
             // the rational result, i.e. 0 unless the base is 1 or _1
-            if (mpz_cmp_si(s->val, 1) == 0)
-                mpz_set_ui(s->val, 1);
-            else if (mpz_cmp_si(s->val, -1) == 0)
-                mpz_set_si(s->val, mpz_odd_p(a) ? -1 : 1);
+            if (mpz_cmp_si(stack_top(s), 1) == 0)
+                mpz_set_ui(stack_top(s), 1);
+            else if (mpz_cmp_si(stack_top(s), -1) == 0)
+                mpz_set_si(stack_top(s), mpz_odd_p(a) ? -1 : 1);
             else
-                mpz_set_ui(s->val, 0);
+                mpz_set_ui(stack_top(s), 0);
         } else {
-            mpz_pow_ui(s->val, s->val, mpz_get_ui(a));
+            mpz_pow_ui(stack_top(s), stack_top(s), mpz_get_ui(a));
         }
         mpz_clear(a);
         return s;
@@ -201,17 +220,17 @@ static Stack _calc_proceed(Stack s, const char* command) {
             _calc_error("stack underflow");
             return s;
         }
-        if (mpz_sgn(s->val) < 0) {
+        if (mpz_sgn(stack_top(s)) < 0) {
             _calc_error("square root of negative number");
             return s;
         }
-        mpz_root(s->val, s->val, 2);
+        mpz_root(stack_top(s), stack_top(s), 2);
         return s;
     }
 
     // Clear the stack
     if (strcmp(command, "c") == 0)
-        return stack_delete(s);
+        return stack_clear(s);
 
     // Print the top value
     if (strcmp(command, "p") == 0) {
@@ -219,7 +238,7 @@ static Stack _calc_proceed(Stack s, const char* command) {
             _calc_error("stack underflow");
             return s;
         }
-        mpz_out_str(stdout, 10, s->val);
+        mpz_out_str(stdout, 10, stack_top(s));
         puts("");
         return s;
     }
@@ -230,7 +249,7 @@ static Stack _calc_proceed(Stack s, const char* command) {
             _calc_error("stack underflow");
             return s;
         }
-        mpz_out_str(stdout, 10, s->val);
+        mpz_out_str(stdout, 10, stack_top(s));
         mpz_t a;
         s = stack_pop(s, &a);
         mpz_clear(a);
@@ -250,10 +269,8 @@ static Stack _calc_proceed(Stack s, const char* command) {
         mpz_abs(a, a);
         size_t nbytes = mpz_sizeinbase(a, 256);  // at least 1, even for zero
         unsigned char *bytes = malloc(nbytes);
-        if (!bytes) {
-            fputs("Memory allocation error\n", stderr);
-            exit(1);
-        }
+        if (!bytes)
+            rpn_fatal("memory allocation error");
         size_t count = 0;
         mpz_export(bytes, &count, 1, 1, 1, 0, a);
         if (count == 0)
@@ -267,11 +284,9 @@ static Stack _calc_proceed(Stack s, const char* command) {
 
     // Print all the stack
     if (strcmp(command, "f") == 0) {
-        Stack below = s;
-        while (below) {
-            mpz_out_str(stdout, 10, below->val);
+        for (size_t i = s->size; i-- > 0; ) {
+            mpz_out_str(stdout, 10, s->vals[i]);
             puts("");
-            below = below->below;
         }
         return s;
     }
@@ -282,7 +297,7 @@ static Stack _calc_proceed(Stack s, const char* command) {
             _calc_error("stack underflow");
             return s;
         }
-        return stack_push(s, s->val);
+        return stack_push(s, stack_top(s));
     }
 
     // Swap the top two values of the stack (a no-op with fewer than two
@@ -290,11 +305,7 @@ static Stack _calc_proceed(Stack s, const char* command) {
     if (strcmp(command, "r") == 0) {
         if (!stack_hasAtLeast(s, 2))
             return s;
-        mpz_t tmp;
-        mpz_init_set(tmp, s->val);
-        mpz_set(s->val, s->below->val);
-        mpz_set(s->below->val, tmp);
-        mpz_clear(tmp);
+        mpz_swap(stack_top(s), stack_second(s));
         return s;
     }
 
@@ -360,16 +371,17 @@ static char *_calc_firstToken(char *token, char *str) {
  */
 Stack calc_parse(Stack s, char* string) {
     char *ptr = string;
-    char *token = calloc((strlen(string) + 1), sizeof(char));
+    size_t tokcap;
+    if (ckd_add(&tokcap, strlen(string), (size_t) 1))
+        rpn_fatal("input too large");
 
-    if (!token) {
-        fputs("Memory allocation error\n", stderr);
-        exit(1);
-    }
+    char *token = calloc(tokcap, sizeof(char));
+    if (!token)
+        rpn_fatal("memory allocation error");
 
     ptr = _calc_firstToken(token, ptr);
 
-    while (token && token[0] != '\0') {
+    while (token[0] != '\0') {
         // Comment
         if (token[0] == '#')
             break;

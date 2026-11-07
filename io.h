@@ -25,15 +25,15 @@ SOFTWARE.
 #ifndef IO_H
 #define IO_H
 
-#define STDIN_BUFFER_SIZE 16
+[[noreturn]] void rpn_fatal(const char *msg);
 
-char *bufferedInput();
+char *read_line(void);
 
 void printUsage(const char *progName);
 
 void printVersion(const char *version, const char *copyright);
 
-char *strAppend(char *dest, const char *src);
+[[nodiscard]] char *strAppend(char *dest, const char *src);
 
 #endif
 

@@ -1,7 +1,7 @@
 CC		= gcc
 OBJS	= main.o calc.o stack.o io.o
-STD		= c99
-CFLAGS	= -c -g -Wall -pedantic -std=$(STD) -MMD -MP
+STD		= c23
+CFLAGS	= -c -g -Wall -pedantic -std=$(STD) -MMD -MP -D_FORTIFY_SOURCE=3 -O2
 LDFLAGS	= -lgmp
 PGM		= rpn
 
@@ -22,7 +22,7 @@ clean:
 # For development
 
 check:
-		cppcheck -q --error-exitcode=1 --std=$(STD) *.c *.h
+		cppcheck -q --error-exitcode=1 *.c *.h
 
 valgrind: $(PGM)
 		valgrind ./$(PGM)

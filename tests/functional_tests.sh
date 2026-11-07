@@ -270,6 +270,22 @@ test "_1 _2 ^ p"  "1"
 test "_1 _3 ^ p"  "-1"
 test "_1 _99999999999999999999999 ^ p"  "-1"
 
+# Positive exponents whose result would exceed 32 MiB (MAX_POW_BITS) are
+# rejected gracefully with the operands kept on the stack, instead of
+# letting GMP abort on a huge allocation failure. The estimate is
+# exp * bits(base): base 2 has 2 bits, so the cap allows exp up to 2^27.
+test_error_stack "2 18446744073709551615 ^ f"  $'18446744073709551615\n2'  "exponent too large in raise"
+test_error_stack "_2 18446744073709551615 ^ f"  $'18446744073709551615\n-2'  "exponent too large in raise"
+test_error_stack "2 134217729 ^ f"  $'134217729\n2'  "exponent too large in raise"  # 2*exp > 2^28 bits
+test_error_stack "10 67108865 ^ f"  $'67108865\n10'  "exponent too large in raise"  # 4*exp > 2^28 bits
+test_exit 1 -e "2 18446744073709551615 ^"
+# The cap itself is allowed: 2 * 2^27 = 2^28 bits = exactly 32 MiB
+test "2 134217728 ^ c f"  ""
+# Bases 0 and +-1 stay instant for any exponent
+test "0 18446744073709551615 ^ p"  "0"
+test "1 18446744073709551615 ^ p"  "1"
+test "_1 18446744073709551615 ^ p"  "-1"
+
 # Integer square root truncates: sqrt(456789) = 675
 test "456789 v f"  "675"
 test "2 v p"  "1"
