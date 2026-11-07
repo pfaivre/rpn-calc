@@ -36,13 +36,18 @@ Print a usage message briefly summarizing these command-line options, then exit.
 ```sh
 -e, --expression=script
 ```
-Add the commands in script to the set of commands to be run while processing 
-the input.
+Add the commands in script to the set of commands to be run. Multiple `-e`
+options are concatenated.
 
-If any command-line parameters remain after processing the above, these 
-parameters are interpreted as the names of input files to be processed. A file 
-name of - refers to the standard input stream. The standard input will 
-processed if no script files or expressions are specified.
+## Input
+Without `-e`, expressions are read from the standard input, one per line; the
+stack persists across lines. Spaces, tabs and newlines separate tokens, and
+spaces may be omitted between tokens (`2 3*4+p`). Negative numbers are written
+with an underscore prefix (`_5`). A `#` starts a comment that runs to the end
+of the line.
+
+The exit status is 0 when every command succeeded, and 1 if any command failed
+(errors are reported on stderr) or an unknown option was given.
 
 ## Installation
 This program depends on GNU MP library version 6 or above. It is available with 
@@ -59,13 +64,13 @@ $ ./rpn
 
 `+` Pops two values off the stack, adds them and pushes the result on the stack.
 
-`-` Pops two values off the stack, substracts the first from the second and pushes the result on the stack.
+`-` Pops two values off the stack, subtracts the first popped from the second popped and pushes the result on the stack.
 
 `*` Pops two values off the stack, multiplies them and pushes the result on the stack.
 
-`/` Pops two values off the stack, divids the first from the second and pushes the result on the stack.
+`/` Pops two values off the stack, divides the second popped by the first popped and pushes the quotient on the stack.
 
-`%` Pops two values off the stack, divids the first from the second and pushes the remainder on the stack.
+`%` Pops two values off the stack, divides the second popped by the first popped and pushes the remainder on the stack.
 
 `~` Pops two values off the stack, divides the second one popped by the first one popped. The quotient is pushed first, and the remainder is pushed next.
 
@@ -88,5 +93,5 @@ This program is much more basic than dc and currently lacks some notable feature
 - conditionals and loops
 
 ## License
-Copyright 2016-2023 Pierre Faivre. This is free software, and may be redistributed 
+Copyright 2016-2026 Pierre Faivre. This is free software, and may be redistributed 
 under the terms specified in the LICENSE file.
