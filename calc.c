@@ -224,6 +224,44 @@ Stack _calc_proceed(Stack s, const char* command) {
         return s;
     }
 
+    // Pop the top value and print it without a trailing newline
+    if (strcmp(command, "n") == 0) {
+        if (!stack_hasAtLeast(s, 1)) {
+            _calc_error("stack underflow");
+            return s;
+        }
+        mpz_out_str(stdout, 10, s->val);
+        mpz_t a;
+        s = stack_pop(s, &a);
+        mpz_clear(a);
+        return s;
+    }
+
+    // Pop the top value and print it as a string of bytes, most significant
+    // byte of its absolute value first, without a trailing newline (dc's P
+    // on a number; string literals are not supported)
+    if (strcmp(command, "P") == 0) {
+        if (!stack_hasAtLeast(s, 1)) {
+            _calc_error("stack underflow");
+            return s;
+        }
+        mpz_t a, byte;
+        s = stack_pop(s, &a);
+        mpz_init(byte);
+        mpz_abs(a, a);
+        unsigned long nbytes = (mpz_sizeinbase(a, 2) + 7) / 8;
+        if (nbytes == 0)
+            nbytes = 1;  // zero prints as a single NUL byte, as in dc
+        for (unsigned long i = nbytes; i-- > 0; ) {
+            mpz_fdiv_q_2exp(byte, a, 8 * i);
+            mpz_fdiv_r_2exp(byte, byte, 8);
+            putchar((int) mpz_get_ui(byte));
+        }
+        mpz_clear(byte);
+        mpz_clear(a);
+        return s;
+    }
+
     // Print all the stack
     if (strcmp(command, "f") == 0) {
         Stack below = s;

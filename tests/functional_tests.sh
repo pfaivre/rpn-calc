@@ -287,6 +287,24 @@ test "5 c 3 p"  "3"
 test "f"  ""
 test "1 2 c f"  ""
 
+# ===== n AND P (print without newline) =====
+
+# n prints the value without a trailing newline and pops it
+test "65 n"  "65"
+test "65 n 66 n"  "6566"
+test_error "5 n n"  "stack underflow"
+test_error "n"  "stack underflow"
+
+# P prints the number as bytes, most significant byte first (dc semantics)
+test "72 P"  "H"
+test "26952 P"  "iH"          # 26952 = 105*256 + 72
+test "72 105 256 * + P"  "iH"
+test "16706 P"  "AB"          # 16706 = 0x4142
+test "4276803 P"  "ABC"       # 0x414243
+test "_72 P"  "H"             # absolute value
+test "18496 P"  "H@"          # 0x4840
+test_error "P"  "stack underflow"
+
 # ===== COMPACT NOTATION (no spaces between tokens) =====
 
 test "2 3*4+p"  "10"
@@ -294,6 +312,8 @@ test "12_3-p"  "15"   # 12 - (-3)
 test "10 2/p"  "5"
 test "5 5 +p"  "10"
 test "1 2+3*p"  "9"
+test "65n"  "65"
+test "72P"  "H"
 
 # Tabs separate tokens too
 test_lines "3"  '1\t2 + p\n'
