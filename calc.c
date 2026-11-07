@@ -244,12 +244,11 @@ Stack _calc_proceed(Stack s, const char* command) {
         return stack_push(s, s->val);
     }
 
-    // Swap the top two values of the stack
+    // Swap the top two values of the stack (a no-op with fewer than two
+    // values, as in dc)
     if (strcmp(command, "r") == 0) {
-        if (!stack_hasAtLeast(s, 2)) {
-            _calc_error("stack underflow");
+        if (!stack_hasAtLeast(s, 2))
             return s;
-        }
         mpz_t tmp;
         mpz_init_set(tmp, s->val);
         mpz_set(s->val, s->below->val);

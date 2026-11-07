@@ -80,7 +80,7 @@ $ ./rpn
 
 `d` Duplicates the top value of the stack.
 
-`r` Swaps the two top values of the stack.
+`r` Swaps the two top values of the stack. With fewer than two values on the stack it does nothing (as in dc).
 
 `c` Clears the stack.
 

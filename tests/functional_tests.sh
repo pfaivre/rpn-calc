@@ -276,6 +276,10 @@ test "5 2 r - f"  "-3"
 # Swap twice restores the original order
 test_stack "1 2 r r f"  "2" "1"
 
+# Swap with fewer than two values is a silent no-op (as in dc)
+test "r f"  ""
+test "1 r f"  "1"
+
 # Clear then push
 test "5 c 3 p"  "3"
 
@@ -351,7 +355,6 @@ test_error_stack "2 99999999999999999999 ^ f"  $'99999999999999999999\n2'  "expo
 test_error "p"  "stack underflow"
 test_error "v"  "stack underflow"
 test_error "d"  "stack underflow"
-test_error "1 r"  "stack underflow"
 test_error "1 +"  "stack underflow"
 test_error "1 -"  "stack underflow"
 test_error "1 *"  "stack underflow"
