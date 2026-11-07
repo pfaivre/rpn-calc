@@ -48,7 +48,6 @@ SOFTWARE.
 
 
 int main(int argc, char **argv) {
-    bool opt_e = false;
     char *expression = NULL;
     char option;
 
@@ -68,7 +67,6 @@ int main(int argc, char **argv) {
 
         switch (option) {
             case 'e':
-                opt_e = true;
                 expression = strAppend(expression, " "); // in case of multiple -e
                 expression = strAppend(expression, optarg);
                 break;
@@ -84,29 +82,23 @@ int main(int argc, char **argv) {
         }
     }
 
-    // Option -e
-    if (opt_e) {
-        Stack s = stack_init();
+    Stack s = stack_init();
 
+    // Option -e: evaluate the concatenated expressions as one input
+    if (expression) {
         s = calc_parse(s, expression);
-
         free(expression);
-        s = stack_delete(s);
     }
-    // No -e nor -f
+    // Otherwise read expressions from the standard input, one per line
     else {
-        char *input = NULL;
-        Stack s = stack_init();
-
-        while ((input = bufferedInput()) != NULL) {
-            s = calc_parse(s, input);
-
-            free(input);
+        char *line;
+        while ((line = read_line()) != NULL) {
+            s = calc_parse(s, line);
+            free(line);
         }
-
-        s = stack_delete(s);
     }
-    
+
+    s = stack_delete(s);
     return calc_had_error() ? 1 : 0;
 }
 

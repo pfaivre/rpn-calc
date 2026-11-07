@@ -25,13 +25,9 @@ SOFTWARE.
 #ifndef IO_H
 #define IO_H
 
-#define STDIN_BUFFER_SIZE 16
-
-static_assert(STDIN_BUFFER_SIZE > 1, "bufferedInput needs room for at least one byte");
-
 [[noreturn]] void rpn_fatal(const char *msg);
 
-char *bufferedInput();
+char *read_line(void);
 
 void printUsage(const char *progName);
 

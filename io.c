@@ -22,6 +22,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+/* getline() is POSIX, not ISO C23: request it explicitly so it is declared
+ * under -std=c23 */
+#define _POSIX_C_SOURCE 200809L
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -39,69 +43,24 @@ SOFTWARE.
 }
 
 /**
- * Append count bytes to a growing NUL-terminated string, checking the new
- * size against overflow
- * @param input The string (allocated); may be reallocated
- * @param input_len Current length of input in bytes; updated on return
- * @param buf Bytes to append
- * @param count Number of bytes to append
- * @return The (possibly moved) string
- */
-static char *append_bytes(char *input, size_t *input_len, const char *buf, size_t count) {
-    size_t size;
-    if (ckd_add(&size, *input_len, count) || ckd_add(&size, size, (size_t) 1))
-        rpn_fatal("input too large");
-
-    char *grown = realloc(input, size);
-    if (!grown)
-        rpn_fatal("memory allocation error");
-
-    memcpy(grown + *input_len, buf, count);
-    *input_len += count;
-    grown[*input_len] = '\0';
-    return grown;
-}
-
-/**
  * Read one line from the standard input (until newline or EOF).
- * It can support an arbitrary amount of text.
- * TODO: Write directly in the input without the buffer
+ * The line can have arbitrary length and may contain NUL bytes; the
+ * parser only sees up to the first NUL.
  * @return A newly allocated string holding the line without its trailing
  *         newline, an empty string for an empty line, or NULL at EOF
  */
-char *bufferedInput() {
-    char *input = calloc(1,1);
-    if (!input)
-        rpn_fatal("memory allocation error");
+char *read_line(void) {
+    char *line = NULL;
+    size_t cap = 0;
+    ssize_t len = getline(&line, &cap, stdin);
 
-    char buffer[STDIN_BUFFER_SIZE];
-    int c;
-    size_t count = 0;
-    size_t input_len = 0;
-
-    c = getchar();
-    if (c == EOF) {
-        free(input);
+    if (len < 0) {
+        free(line);
         return NULL;
     }
-
-    while (c != EOF && c != '\n') {
-        buffer[count++] = (char) c;
-
-        // Flush by byte count: strlen() stops at a NUL byte in the input and
-        // would let count grow past the end of buffer
-        if (count >= (size_t) STDIN_BUFFER_SIZE - 1) {
-            input = append_bytes(input, &input_len, buffer, count);
-            count = 0;
-        }
-
-        c = getchar();
-    }
-
-    if (count > 0)
-        input = append_bytes(input, &input_len, buffer, count);
-
-    return input;
+    if (len > 0 && line[len - 1] == '\n')
+        line[--len] = '\0';
+    return line;
 }
 
 void printUsage(const char *progName) {
