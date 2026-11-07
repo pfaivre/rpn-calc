@@ -78,7 +78,7 @@ $ ./rpn
 
 `~` Pops two values off the stack, divides the second one popped by the first one popped. The quotient is pushed first, and the remainder is pushed next.
 
-`^` Pops two values off the stack, use the first as the exponent and the second as the base and pushes the result on the stack. A negative exponent gives the integer part of the exact result, as dc does at scale 0: 0 unless the base is 1 or _1 (which give 1 or _1 according to the exponent's parity).
+`^` Pops two values off the stack, use the first as the exponent and the second as the base and pushes the result on the stack. A negative exponent gives the integer part of the exact result, as dc does at scale 0: 0 unless the base is 1 or _1 (which give 1 or _1 according to the exponent's parity). A positive exponent whose result would exceed 32 MiB is rejected with an error and the operands stay on the stack.
 
 `v` Pops one value, computes its square root, and pushes the result to the stack.
 
@@ -125,10 +125,10 @@ rpn deliberately differs from dc in the following ways:
   as in dc, but `P` only accepts numbers — `[...]` string literals are not
   supported.
 
-- A positive exponent that does not fit in an unsigned long is rejected with
-  `exponent too large in raise` (dc attempts somewhat larger exponents),
-  while a huge negative exponent is computed exactly (0, 1 or _1), where dc
-  gives up with the same error.
+- A positive exponent that does not fit in an unsigned long, or whose result
+  would exceed 32 MiB, is rejected with `exponent too large in raise`, while
+  a huge negative exponent is computed exactly (0, 1 or _1), where dc gives
+  up with the same error.
 
 ## Limitations
 This program is much more basic than dc and currently lacks some notable features like:

@@ -34,6 +34,11 @@ SOFTWARE.
 #include "io.h"
 #include "stack.h"
 
+/* Maximum size of a ^ result, in bits (32 MiB). Beyond this, mpz_pow_ui
+ * risks exhausting memory and GMP aborts on allocation failure, so the
+ * exponent is rejected up front with a graceful error instead. */
+#define MAX_POW_BITS ((size_t) 1 << 28)
+
 static bool _calc_errorFlag = false;
 
 /**
@@ -176,6 +181,19 @@ static Stack _calc_proceed(Stack s, const char* command) {
         if (mpz_sgn(s->val) > 0 && !mpz_fits_ulong_p(s->val)) {
             _calc_error("exponent too large in raise");
             return s;
+        }
+        // Cap the result size: base^exp has about exp * bits(base) bits, and
+        // beyond MAX_POW_BITS GMP would attempt a huge allocation and abort
+        // on failure. Bases 0 and +-1 are exact for any exponent and stay
+        // instant. Checked before popping so the operands stay on the stack.
+        if (mpz_sgn(s->val) > 0 && mpz_cmpabs_ui(s->below->val, 1) > 0) {
+            size_t result_bits;
+            if (ckd_mul(&result_bits, (size_t) mpz_get_ui(s->val),
+                        mpz_sizeinbase(s->below->val, 2))
+                || result_bits > MAX_POW_BITS) {
+                _calc_error("exponent too large in raise");
+                return s;
+            }
         }
         mpz_t a;
         s = stack_pop(s, &a);
