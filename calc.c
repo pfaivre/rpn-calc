@@ -169,6 +169,10 @@ Stack _calc_proceed(Stack s, const char* command) {
                 fputs("rpn: stack empty\n", stderr);
                 return s;
             }
+            if (mpz_sgn(s->val) < 0) {
+                fputs("rpn: negative exponent\n", stderr);
+                return s;
+            }
             mpz_t a;
             s = stack_pop(s, &a);
             long exp = mpz_get_si(a);
@@ -180,6 +184,10 @@ Stack _calc_proceed(Stack s, const char* command) {
         else if (strcmp(command, "v") == 0) {
             if (!stack_hasAtLeast(s, 1)) {
                 fputs("rpn: stack empty\n", stderr);
+                return s;
+            }
+            if (mpz_sgn(s->val) < 0) {
+                fputs("rpn: square root of negative number\n", stderr);
                 return s;
             }
             mpz_root(s->val, s->val, 2);

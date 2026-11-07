@@ -41,6 +41,24 @@ function test_error ()
     fi
 }
 
+# test_error_stack EXPRESSION EXPECTED_STDOUT STDERR_SUBSTRING -- error case whose operands stay on the stack
+function test_error_stack ()
+{
+    local expression=$1
+    local expected_result=$2
+    local expected_error=$3
+    local result error_result
+
+    tests_run=$((tests_run + 1))
+    error_result=$(echo "$expression" | ./rpn 2>&1 >/dev/null)
+    result=$(echo "$expression" | ./rpn 2>/dev/null)
+
+    if [[ "$error_result" != *"$expected_error"* ]] || [ "$result" != "$expected_result" ]; then
+        failures=$((failures + 1))
+        echo "FAIL '$expression': expected stderr '$expected_error' and stdout '$expected_result', got stderr '$error_result', stdout '$result'"
+    fi
+}
+
 # test_stack EXPRESSION EXPECTED_TOP [EXPECTED_NEXT ...] -- 'f' prints the stack top first
 function test_stack ()
 {
@@ -282,6 +300,12 @@ test_exit 1 -z   # unknown option
 test_error "5 0 /"  "divide by zero"
 test_error "5 0 %"  "remainder by zero"
 test_error "10 0 ~"  "divide by zero"
+
+# Invalid operands: rejected with an error, operands kept on the stack
+test_error "2 _1 ^"  "negative exponent"
+test_error "_4 v"  "square root of negative number"
+test_error_stack "2 _1 ^ f"  $'-1\n2'  "negative exponent"
+test_error_stack "_4 v f"  "-4"  "square root of negative number"
 
 # Stack underflow
 test_error "p"  "stack empty"
