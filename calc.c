@@ -169,14 +169,28 @@ Stack _calc_proceed(Stack s, const char* command) {
             _calc_error("stack underflow");
             return s;
         }
-        if (mpz_sgn(s->val) < 0) {
-            _calc_error("negative exponent");
+        // A positive exponent that does not fit in an unsigned long cannot
+        // be computed; reject it before popping so the operands stay on the
+        // stack (dc reports "exponent too large in raise")
+        if (mpz_sgn(s->val) > 0 && !mpz_fits_ulong_p(s->val)) {
+            _calc_error("exponent too large in raise");
             return s;
         }
         mpz_t a;
         s = stack_pop(s, &a);
-        long exp = mpz_get_si(a);
-        mpz_pow_ui(s->val, s->val, exp);
+        if (mpz_sgn(a) < 0) {
+            // Negative exponent
+            // at the default scale 0 that is the truncation toward zero of
+            // the rational result, i.e. 0 unless the base is 1 or _1
+            if (mpz_cmp_si(s->val, 1) == 0)
+                mpz_set_ui(s->val, 1);
+            else if (mpz_cmp_si(s->val, -1) == 0)
+                mpz_set_si(s->val, mpz_odd_p(a) ? -1 : 1);
+            else
+                mpz_set_ui(s->val, 0);
+        } else {
+            mpz_pow_ui(s->val, s->val, mpz_get_ui(a));
+        }
         mpz_clear(a);
         return s;
     }

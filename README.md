@@ -74,7 +74,7 @@ $ ./rpn
 
 `~` Pops two values off the stack, divides the second one popped by the first one popped. The quotient is pushed first, and the remainder is pushed next.
 
-`^` Pops two values off the stack, use the first as the exponent and the second as the base and pushes the result on the stack.
+`^` Pops two values off the stack, use the first as the exponent and the second as the base and pushes the result on the stack. A negative exponent gives the integer part of the exact result, as dc does at scale 0: 0 unless the base is 1 or _1 (which give 1 or _1 according to the exponent's parity).
 
 `v` Pops one value, computes its square root, and pushes the result to the stack.
 

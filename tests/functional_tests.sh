@@ -243,6 +243,17 @@ test "2 0 ^ p"  "1"
 test "0 5 ^ p"  "0"
 test "0 0 ^ p"  "1"
 
+# Negative exponents follow dc at scale 0: the integer part of base^exp,
+# which is 0 unless the base is 1 or _1
+test "2 _1 ^ p"  "0"
+test "_2 _3 ^ p"  "0"
+test "0 _1 ^ p"  "0"
+test "99999999999999999999 _2 ^ p"  "0"
+test "1 _5 ^ p"  "1"
+test "_1 _2 ^ p"  "1"
+test "_1 _3 ^ p"  "-1"
+test "_1 _99999999999999999999999 ^ p"  "-1"
+
 # Integer square root truncates: sqrt(456789) = 675
 test "456789 v f"  "675"
 test "2 v p"  "1"
@@ -331,10 +342,10 @@ test_error_stack "10 0 % f"  $'0\n10'  "remainder by zero"
 test_error_stack "10 0 ~ f"  $'0\n10'  "divide by zero"
 
 # Invalid operands: rejected with an error, operands kept on the stack
-test_error "2 _1 ^"  "negative exponent"
 test_error "_4 v"  "square root of negative number"
-test_error_stack "2 _1 ^ f"  $'-1\n2'  "negative exponent"
 test_error_stack "_4 v f"  "-4"  "square root of negative number"
+test_error "2 99999999999999999999 ^"  "exponent too large in raise"
+test_error_stack "2 99999999999999999999 ^ f"  $'99999999999999999999\n2'  "exponent too large in raise"
 
 # Stack underflow
 test_error "p"  "stack underflow"
@@ -362,7 +373,7 @@ test_exit_stdin 1 ""  '5 0 /\n'
 test_exit_stdin 1 ""  '5 0 %\n'
 test_exit_stdin 1 ""  '10 0 ~\n'
 test_exit_stdin 1 ""  '1 +\n'
-test_exit_stdin 1 ""  '2 _1 ^\n'
+test_exit_stdin 0 "0"  '2 _1 ^ p\n'
 test_exit_stdin 1 ""  '_4 v\n'
 
 # ...but the session continues after an error
