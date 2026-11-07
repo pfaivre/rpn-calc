@@ -89,11 +89,14 @@ bool stack_isEmpty(Stack s) {
  * @return true if the is n or more elements in the stack
  */
 bool stack_hasAtLeast(Stack s, int n) {
-    while (s != NULL && (n-- > 0)) {
+    int count = 0;
+
+    while (s != NULL && count < n) {
         s = s->below;
+        count++;
     }
 
-    return n <= 0;
+    return count >= n;
 }
 
 /**

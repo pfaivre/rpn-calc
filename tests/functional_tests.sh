@@ -280,6 +280,9 @@ test "10 2/p"  "5"
 test "5 5 +p"  "10"
 test "1 2+3*p"  "9"
 
+# Tabs separate tokens too
+test_lines "3"  '1\t2 + p\n'
+
 # ===== COMMENTS (# to end of line) =====
 
 test "5 5 + p # comment"  "10"
@@ -317,6 +320,7 @@ test_exit 1 -z   # unknown option
 
 # Unimplemented command
 test_error "z"  "unimplemented"
+test_error "xy"  "'x' unimplemented"
 
 # Division by zero (operands stay on the stack, for /, % and ~ alike)
 test_error "5 0 /"  "divide by zero"
@@ -333,17 +337,17 @@ test_error_stack "2 _1 ^ f"  $'-1\n2'  "negative exponent"
 test_error_stack "_4 v f"  "-4"  "square root of negative number"
 
 # Stack underflow
-test_error "p"  "stack empty"
-test_error "v"  "stack empty"
-test_error "d"  "stack empty"
-test_error "1 r"  "stack empty"
-test_error "1 +"  "stack empty"
-test_error "1 -"  "stack empty"
-test_error "1 *"  "stack empty"
-test_error "1 /"  "stack empty"
-test_error "1 %"  "stack empty"
-test_error "1 ~"  "stack empty"
-test_error "1 ^"  "stack empty"
+test_error "p"  "stack underflow"
+test_error "v"  "stack underflow"
+test_error "d"  "stack underflow"
+test_error "1 r"  "stack underflow"
+test_error "1 +"  "stack underflow"
+test_error "1 -"  "stack underflow"
+test_error "1 *"  "stack underflow"
+test_error "1 /"  "stack underflow"
+test_error "1 %"  "stack underflow"
+test_error "1 ~"  "stack underflow"
+test_error "1 ^"  "stack underflow"
 
 # ===== EXIT CODES =====
 

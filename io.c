@@ -61,8 +61,10 @@ char *bufferedInput() {
         // would let count grow past the end of buffer
         if (count >= STDIN_BUFFER_SIZE - 1) {
             realloc_ptr = realloc(input, input_len + count + 1);
-            if (!realloc_ptr)
-                return input;
+            if (!realloc_ptr) {
+                fputs("Memory allocation error\n", stderr);
+                exit(1);
+            }
             input = realloc_ptr;
 
             memcpy(input + input_len, buffer, count);
@@ -76,8 +78,10 @@ char *bufferedInput() {
 
     if (count > 0) {
         realloc_ptr = realloc(input, input_len + count + 1);
-        if (!realloc_ptr)
-            return input;
+        if (!realloc_ptr) {
+            fputs("Memory allocation error\n", stderr);
+            exit(1);
+        }
         input = realloc_ptr;
 
         memcpy(input + input_len, buffer, count);
