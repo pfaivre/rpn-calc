@@ -25,8 +25,42 @@ SOFTWARE.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdckdint.h>
 
 #include "io.h"
+
+/**
+ * Print a fatal error on stderr and exit with a non-zero status
+ * @param msg Error message (without the "rpn: " prefix and newline)
+ */
+[[noreturn]] void rpn_fatal(const char *msg) {
+    fprintf(stderr, "rpn: %s\n", msg);
+    exit(1);
+}
+
+/**
+ * Append count bytes to a growing NUL-terminated string, checking the new
+ * size against overflow
+ * @param input The string (allocated); may be reallocated
+ * @param input_len Current length of input in bytes; updated on return
+ * @param buf Bytes to append
+ * @param count Number of bytes to append
+ * @return The (possibly moved) string
+ */
+static char *append_bytes(char *input, size_t *input_len, const char *buf, size_t count) {
+    size_t size;
+    if (ckd_add(&size, *input_len, count) || ckd_add(&size, size, (size_t) 1))
+        rpn_fatal("input too large");
+
+    char *grown = realloc(input, size);
+    if (!grown)
+        rpn_fatal("memory allocation error");
+
+    memcpy(grown + *input_len, buf, count);
+    *input_len += count;
+    grown[*input_len] = '\0';
+    return grown;
+}
 
 /**
  * Read one line from the standard input (until newline or EOF).
@@ -37,16 +71,13 @@ SOFTWARE.
  */
 char *bufferedInput() {
     char *input = calloc(1,1);
-    char *realloc_ptr = NULL;
+    if (!input)
+        rpn_fatal("memory allocation error");
+
     char buffer[STDIN_BUFFER_SIZE];
     int c;
-    int count = 0;
+    size_t count = 0;
     size_t input_len = 0;
-
-    if (!input) {
-        fputs("Memory allocation error\n", stderr);
-        exit(1);
-    }
 
     c = getchar();
     if (c == EOF) {
@@ -59,35 +90,16 @@ char *bufferedInput() {
 
         // Flush by byte count: strlen() stops at a NUL byte in the input and
         // would let count grow past the end of buffer
-        if (count >= STDIN_BUFFER_SIZE - 1) {
-            realloc_ptr = realloc(input, input_len + count + 1);
-            if (!realloc_ptr) {
-                fputs("Memory allocation error\n", stderr);
-                exit(1);
-            }
-            input = realloc_ptr;
-
-            memcpy(input + input_len, buffer, count);
-            input_len += count;
-            input[input_len] = '\0';
+        if (count >= (size_t) STDIN_BUFFER_SIZE - 1) {
+            input = append_bytes(input, &input_len, buffer, count);
             count = 0;
         }
 
         c = getchar();
     }
 
-    if (count > 0) {
-        realloc_ptr = realloc(input, input_len + count + 1);
-        if (!realloc_ptr) {
-            fputs("Memory allocation error\n", stderr);
-            exit(1);
-        }
-        input = realloc_ptr;
-
-        memcpy(input + input_len, buffer, count);
-        input_len += count;
-        input[input_len] = '\0';
-    }
+    if (count > 0)
+        input = append_bytes(input, &input_len, buffer, count);
 
     return input;
 }
@@ -115,27 +127,31 @@ void printVersion(const char *version, const char *copyright) {
  * @return The new pointer location
  */
 char *strAppend(char *dest, const char *src) {
+    size_t src_len = strlen(src);
+    size_t size;
+
     // If not allocated yet, just copy
     if (dest == NULL) {
-        dest = (char*) malloc(sizeof(char) * (strlen(src) + 1));
-        
-        if (dest == NULL) {
-            fputs("Memory allocation error\n", stderr);
-            exit(1);
-        }
-        
-        strcpy(dest, src);
+        if (ckd_add(&size, src_len, (size_t) 1))
+            rpn_fatal("expression too large");
+
+        dest = malloc(size);
+        if (!dest)
+            rpn_fatal("memory allocation error");
+
+        memcpy(dest, src, size);  // copies the terminating NUL as well
     }
     // Otherwise, concatenate them
     else {
-        dest = (char*) realloc(dest, sizeof(char) * (strlen(src) + strlen(dest) + 1));
-        
-        if (dest == NULL) {
-            fputs("Memory allocation error\n", stderr);
-            exit(1);
-        }
+        size_t dest_len = strlen(dest);
+        if (ckd_add(&size, dest_len, src_len) || ckd_add(&size, size, (size_t) 1))
+            rpn_fatal("expression too large");
 
-        strcat(dest, src);
+        dest = realloc(dest, size);
+        if (!dest)
+            rpn_fatal("memory allocation error");
+
+        memcpy(dest + dest_len, src, src_len + 1);  // copies the terminating NUL as well
     }
 
     return dest;

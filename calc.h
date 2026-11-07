@@ -25,13 +25,11 @@ SOFTWARE.
 #ifndef CALC_H
 #define CALC_H
 
-#include <stdbool.h>
-
 #include "stack.h"
 
-Stack calc_parse(Stack s, char* string);
+[[nodiscard]] Stack calc_parse(Stack s, char* string);
 
-bool calc_had_error();
+[[nodiscard]] bool calc_had_error();
 
 #endif
 

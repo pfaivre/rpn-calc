@@ -1,7 +1,7 @@
 CC		= gcc
 OBJS	= main.o calc.o stack.o io.o
-STD		= c99
-CFLAGS	= -c -g -Wall -pedantic -std=$(STD) -MMD -MP
+STD		= c23
+CFLAGS	= -c -g -Wall -pedantic -std=$(STD) -MMD -MP -D_FORTIFY_SOURCE=3 -O2
 LDFLAGS	= -lgmp
 PGM		= rpn
 

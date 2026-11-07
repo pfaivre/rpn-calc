@@ -24,10 +24,10 @@ SOFTWARE.
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 
 #include <gmp.h>
 
+#include "io.h"
 #include "stack.h"
 
 /**
@@ -46,10 +46,8 @@ Stack stack_init() {
 Stack stack_push(Stack s, mpz_t val) {
     Stack n = (Stack) malloc(sizeof(StructStack));
 
-    if (!n) {
-        fputs("Memory allocation error\n", stderr);
-        exit(1);
-    }
+    if (!n)
+        rpn_fatal("memory allocation error");
 
     mpz_init_set(n->val, val);
     n->below = s;
@@ -74,14 +72,6 @@ Stack stack_pop(Stack s, mpz_t *val) {
     }
 
     return below;
-}
-
-/**
- * Check if the stack is empty
- * @return true if there is no more elements in the stack
- */
-bool stack_isEmpty(Stack s) {
-    return s == NULL;
 }
 
 /**

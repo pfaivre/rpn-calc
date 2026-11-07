@@ -27,13 +27,17 @@ SOFTWARE.
 
 #define STDIN_BUFFER_SIZE 16
 
+static_assert(STDIN_BUFFER_SIZE > 1, "bufferedInput needs room for at least one byte");
+
+[[noreturn]] void rpn_fatal(const char *msg);
+
 char *bufferedInput();
 
 void printUsage(const char *progName);
 
 void printVersion(const char *version, const char *copyright);
 
-char *strAppend(char *dest, const char *src);
+[[nodiscard]] char *strAppend(char *dest, const char *src);
 
 #endif
 

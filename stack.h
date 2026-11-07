@@ -25,8 +25,6 @@ SOFTWARE.
 #ifndef STACK_H
 #define STACK_H
 
-#include <stdbool.h>
-
 #include <gmp.h>
 
 /**
@@ -42,15 +40,13 @@ typedef StructStack* Stack;
 
 Stack stack_init();
 
-Stack stack_push(Stack, mpz_t);
+[[nodiscard]] Stack stack_push(Stack, mpz_t);
 
-Stack stack_pop(Stack, mpz_t*);
-
-bool stack_isEmpty(Stack);
+[[nodiscard]] Stack stack_pop(Stack, mpz_t*);
 
 bool stack_hasAtLeast(Stack, int);
 
-Stack stack_delete(Stack);
+[[nodiscard]] Stack stack_delete(Stack);
 
 #endif
 

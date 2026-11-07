@@ -28,7 +28,6 @@ SOFTWARE.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
 #include <unistd.h>
 #include <getopt.h>
 
@@ -92,7 +91,7 @@ int main(int argc, char **argv) {
         s = calc_parse(s, expression);
 
         free(expression);
-        stack_delete(s);
+        s = stack_delete(s);
     }
     // No -e nor -f
     else {
@@ -105,7 +104,7 @@ int main(int argc, char **argv) {
             free(input);
         }
 
-        stack_delete(s);
+        s = stack_delete(s);
     }
     
     return calc_had_error() ? 1 : 0;

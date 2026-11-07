@@ -22,15 +22,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdckdint.h>
 
 #include <gmp.h>
 
 #include "calc.h"
+#include "io.h"
 #include "stack.h"
 
 static bool _calc_errorFlag = false;
@@ -250,10 +251,8 @@ static Stack _calc_proceed(Stack s, const char* command) {
         mpz_abs(a, a);
         size_t nbytes = mpz_sizeinbase(a, 256);  // at least 1, even for zero
         unsigned char *bytes = malloc(nbytes);
-        if (!bytes) {
-            fputs("Memory allocation error\n", stderr);
-            exit(1);
-        }
+        if (!bytes)
+            rpn_fatal("memory allocation error");
         size_t count = 0;
         mpz_export(bytes, &count, 1, 1, 1, 0, a);
         if (count == 0)
@@ -360,12 +359,13 @@ static char *_calc_firstToken(char *token, char *str) {
  */
 Stack calc_parse(Stack s, char* string) {
     char *ptr = string;
-    char *token = calloc((strlen(string) + 1), sizeof(char));
+    size_t tokcap;
+    if (ckd_add(&tokcap, strlen(string), (size_t) 1))
+        rpn_fatal("input too large");
 
-    if (!token) {
-        fputs("Memory allocation error\n", stderr);
-        exit(1);
-    }
+    char *token = calloc(tokcap, sizeof(char));
+    if (!token)
+        rpn_fatal("memory allocation error");
 
     ptr = _calc_firstToken(token, ptr);
 
