@@ -26,7 +26,6 @@ SOFTWARE.
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
-#include <ctype.h>
 #include <stdckdint.h>
 
 #include <gmp.h>
@@ -45,6 +44,11 @@ static bool _calc_errorFlag = false;
 /* The scale factor set by k: number of fractional digits produced by /, %,
  * ~, ^ with a negative exponent and v */
 static long _calc_scale = 0;
+
+/* The input base (i) and output base (o), both in 2..16; numbers are stored
+ * base 10 internally and converted at parse/print time */
+static long _calc_in_base = 10;
+static long _calc_out_base = 10;
 
 /* Levels of macro execution still to unwind, set by q/Q: when a frame of
  * _calc_parse_depth sees it positive, it abandons the rest of its input */
@@ -138,7 +142,7 @@ static Stack _calc_num_binop(Stack s, NumberBinop op) {
 }
 
 /**
- * Print a value in decimal: a string as-is, a number with its scale
+ * Print a value in the output base: a string as-is, a number with its scale
  * @param v Value to print
  * @param newline Whether to append a trailing newline
  */
@@ -148,7 +152,7 @@ static void _calc_print(const Value *v, bool newline) {
         if (newline)
             putchar('\n');
     } else {
-        number_print(v, newline);
+        number_print(v, newline, _calc_out_base);
     }
 }
 
@@ -184,16 +188,54 @@ static bool _calc_index_mpz(const Value *v, mpz_t idx) {
 }
 
 /**
- * Push the number 0 onto the stack (the load of an empty register or of a
- * never-stored array cell)
+ * Pop the top value as a base (the i and o commands): its integer part must
+ * be a number in 2..16. On error the value stays on the stack.
  * @param s Stack to modify
- * @return The stack with 0 on top
+ * @param slot The base variable to set on success
+ * @param low_err Error message when the value is not a number or below 2
+ * @param high_err Error message when the value exceeds 16
+ * @return The stack after the command
  */
-static Stack _calc_push_zero(Stack s) {
-    mpz_t zero;
-    mpz_init_set_ui(zero, 0);
-    s = stack_push_num(s, zero);
-    mpz_clear(zero);
+static Stack _calc_pop_base(Stack s, long *slot, const char *low_err, const char *high_err) {
+    if (!stack_hasAtLeast(s, 1)) {
+        _calc_error("stack underflow");
+        return s;
+    }
+    mpz_t ip;
+    mpz_init(ip);
+    const char *err = NULL;
+    if (!_calc_int_part_into(stack_top(s), ip))
+        err = low_err;
+    else if (!mpz_fits_slong_p(ip) || mpz_cmp_ui(ip, 2) < 0)
+        err = low_err;
+    else if (mpz_cmp_ui(ip, 16) > 0)
+        err = high_err;
+    if (err) {
+        _calc_error(err);
+        mpz_clear(ip);
+        return s;
+    }
+    *slot = mpz_get_si(ip);
+    mpz_clear(ip);
+    Value a;
+    s = stack_pop(s, &a);
+    value_clear(&a);
+    return s;
+}
+
+/**
+ * Push a long as a number value onto the stack (0 for the load of an empty
+ * register or of a never-stored array cell, the scale factor K, the bases
+ * I and O)
+ * @param s Stack to modify
+ * @param v The value to push
+ * @return The stack with v on top
+ */
+static Stack _calc_push_long(Stack s, long v) {
+    mpz_t m;
+    mpz_init_set_si(m, v);
+    s = stack_push_num(s, m);
+    mpz_clear(m);
     return s;
 }
 
@@ -226,7 +268,7 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
             Stack rs = register_stack(regs, name);
             if (stack_hasAtLeast(rs, 1))
                 return stack_push_value(s, *stack_top(rs));
-            return _calc_push_zero(s);
+            return _calc_push_long(s, 0);
         }
         // S: pop the top of the main stack and push it onto the register's
         // own stack
@@ -291,7 +333,7 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
             if (cell)
                 s = stack_push_value(s, *cell);
             else
-                s = _calc_push_zero(s);
+                s = _calc_push_long(s, 0);
             value_clear(&index);
             return s;
         }
@@ -374,7 +416,7 @@ static Stack _calc_conditional(Stack s, Registers regs, const char *op, unsigned
     if (stack_hasAtLeast(rs, 1))
         s = stack_push_value(s, *stack_top(rs));
     else
-        s = _calc_push_zero(s);
+        s = _calc_push_long(s, 0);
     return _calc_exec_top(s, regs, depth);
 }
 
@@ -388,10 +430,12 @@ static Stack _calc_conditional(Stack s, Registers regs, const char *op, unsigned
  * @return The top of the stack after performing the command
  */
 static Stack _calc_proceed(Stack s, Registers regs, const char* command, int depth) {
-    // A number (integer or decimal: 12, _3, 1.5, .5, 1.)
-    if (isdigit((unsigned char) command[0]) || command[0] == '_' || command[0] == '.') {
+    // A number (integer or decimal: 12, _3, 1.5, .5, 1.; digit chars 0-9A-F
+    // are read in the current input base)
+    if (number_digit_value(command[0]) >= 0 || command[0] == '_'
+        || command[0] == '.') {
         Value v;
-        if (!number_parse(command, &v)) {
+        if (!number_parse(command, _calc_in_base, &v)) {
             _calc_error("scale too large");
             return s;
         }
@@ -490,13 +534,28 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
     }
 
     // K: push the current scale factor
-    if (strcmp(command, "K") == 0) {
-        mpz_t ks;
-        mpz_init_set_si(ks, _calc_scale);
-        s = stack_push_num(s, ks);
-        mpz_clear(ks);
-        return s;
-    }
+    if (strcmp(command, "K") == 0)
+        return _calc_push_long(s, _calc_scale);
+
+    // i: pop the input base (the integer part of the top value, 2..16)
+    if (strcmp(command, "i") == 0)
+        return _calc_pop_base(s, &_calc_in_base,
+                              "input base must be a number between 2 and 16 (inclusive)",
+                              "input base must be a number between 2 and 16 (inclusive)");
+
+    // o: pop the output base (the integer part of the top value, 2..16)
+    if (strcmp(command, "o") == 0)
+        return _calc_pop_base(s, &_calc_out_base,
+                              "output base must be a number greater than 1",
+                              "output base must be a number between 2 and 16 (inclusive)");
+
+    // I: push the current input base
+    if (strcmp(command, "I") == 0)
+        return _calc_push_long(s, _calc_in_base);
+
+    // O: push the current output base
+    if (strcmp(command, "O") == 0)
+        return _calc_push_long(s, _calc_out_base);
 
     // Clear the stack
     if (strcmp(command, "c") == 0)
@@ -631,10 +690,11 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
  * @return true when c belongs to the token being built
  */
 static bool _calc_token_continues(const char *token, size_t len, char c) {
-    // A digit continues a number (possibly negative: _ prefix, or after a .)
-    if (c >= '0' && c <= '9')
+    // A digit char (0-9 or hex letter A-F) continues a number (possibly
+    // negative: _ prefix, or after a .)
+    if (number_digit_value(c) >= 0)
         return len > 0 && (token[len-1] == '_' || token[len-1] == '.'
-                           || (token[len-1] >= '0' && token[len-1] <= '9'));
+                           || number_digit_value(token[len-1]) >= 0);
 
     // A '.' continues a number token that does not contain one yet: 1.5, .5
     // and 1. are single tokens, and a second '.' starts a new token
@@ -643,7 +703,7 @@ static bool _calc_token_continues(const char *token, size_t len, char c) {
         if (strchr(token, '.') != NULL)
             return false;
         for (size_t i = 0; i < len; i++)
-            if (token[i] != '_' && (token[i] < '0' || token[i] > '9'))
+            if (token[i] != '_' && number_digit_value(token[i]) < 0)
                 return false;
         return true;
     }
@@ -730,22 +790,24 @@ static char *_calc_firstToken(char *token, char *str, bool *is_string) {
 }
 
 /**
- * Fetch the register name following a register command letter (the next
- * token, with or without a separating space). A comment is never a name:
- * a '#' token means the rest of the line is a comment, so the command is
- * left without a name.
- * @param ptr Input position, advanced past the name token
- * @param token Token buffer, overwritten with the name token
+ * Fetch the register name following a register command letter or a
+ * conditional operator: the single character after any whitespace, as in dc
+ * (`sA2` names register A and leaves the 2 to be parsed as a number). A
+ * comment or a string literal is never a name: a '#' char means the rest of
+ * the line is a comment, so the command is left without a name.
+ * @param ptr Input position, advanced past the name character
  * @return The register name, or -1 when there is none (error reported)
  */
-static int _calc_register_name(char **ptr, char *token) {
-    bool is_string;
-    *ptr = _calc_firstToken(token, *ptr, &is_string);
-    if (*ptr == NULL || is_string || token[0] == '#' || token[1] != '\0') {
+static int _calc_register_name(char **ptr) {
+    while (**ptr == ' ' || **ptr == '\t' || **ptr == '\n')
+        (*ptr)++;
+    char c = **ptr;
+    if (c == '\0' || c == '#' || c == '[') {
         _calc_error("expected a single-character register name");
         return -1;
     }
-    return (unsigned char) token[0];
+    (*ptr)++;
+    return (unsigned char) c;
 }
 
 /**
@@ -807,12 +869,11 @@ static Stack _calc_parse_depth(Stack s, Registers regs, char* string, int depth)
             break;
 
         // Register commands (s, l, S, L, : and ;) take the register name as
-        // the next token, with or without a separating space (sa and s a
-        // both name register a). Such a token is always a single char: the
-        // tokenizer splits after any non-digit.
+        // the next character, with or without a separating space (sa and s a
+        // both name register a; sA2 names register A and pushes 2, as in dc)
         if (strchr("slSL:;", token[0]) != NULL) {
             char cmd = token[0];
-            int name = _calc_register_name(&ptr, token);
+            int name = _calc_register_name(&ptr);
             if (name < 0)
                 break;
             s = _calc_register_cmd(s, regs, cmd, (unsigned char) name);
@@ -820,11 +881,11 @@ static Stack _calc_parse_depth(Stack s, Registers regs, char* string, int depth)
         }
 
         // Comparison conditionals (>, <, =, !>, !<, !=) also take the register
-        // name as the next token
+        // name as the next character
         const char *op = _calc_conditional_op(token);
         if (op != NULL) {
             char opbuf[3] = { op[0], op[1], '\0' };
-            int name = _calc_register_name(&ptr, token);
+            int name = _calc_register_name(&ptr);
             if (name < 0)
                 break;
             s = _calc_conditional(s, regs, opbuf, (unsigned char) name, depth);

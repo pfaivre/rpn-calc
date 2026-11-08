@@ -118,6 +118,10 @@ same "1 d f"              $'1\n1'
 same "[hello] p"          "hello"
 same "[[a]b] p"           "[a]b"
 same "5 sa la p"          "5"
+same "5 sA2 lA p"         "5"        # the name is one character: A, then 2 is pushed
+same "5 s12 l1 p"         "5"        # digit name followed by a digit: name 1, push 2
+same "[9 p] sA 1 2 >A5 p" $'9\n5'    # conditional name followed by a digit
+same "42 3 :A7 3 ;A p"    "42"       # array command name followed by a digit
 same "5 Sa 6 Sa la la f"  $'6\n6'    # per-register value stack (S pushes, l peeks)
 same "7 La"                              # L on empty register: both error, empty stdout
 same "5 1 :a 1 ;a p"      "5"
@@ -160,6 +164,64 @@ same "[8 p] sa 2 1 >a"    ""         # 1 > 2 does not fire
 same "[9 p] sa 1.5 1.50 =a" "9"      # comparisons ignore scale
 same "[9 p] sa 1.6 1.5 <a"  "9"      # 1.5 < 1.6 fires
 
+# ===== IDENTICAL TO dc: input/output bases (i I o O) =====
+# Numbers are stored base 10 internally; i converts digits at parse, o at print.
+same "16 i FF p"          "255"
+same "16 i 10 p"          "16"
+same "16 o 255 p"         "FF"
+same "16 o _255 p"        "-FF"
+same "2 o 255 p"          "11111111"
+same "16 i F.F p"         "15.9"     # hex fraction truncated to 1 decimal digit
+same "16 i F.FF p"        "15.99"
+same "16 i 0.8 p"         ".5"
+same "2 i 1.1 p"          "1.5"
+same "2 i 10 p"           "2"
+same "16 i _FF p"         "-255"
+same "8 i 10 10 + p"      "16"
+same "16 i A B + p"       "21"
+same "I p O p"            $'10\n10'
+same "16 i I p"           "16"
+same "16 o O p"           "10"       # 16 printed in base 16
+same "16 o 2 k 1 3 / p"   ".54"      # 0.33 decimal -> hex fraction
+same "16 o 3 k 1 3 / p"   ".553"
+same "16 o 0.5 p"         ".8"
+same "2 o 3 k 1 2 / p"    ".1000000000"  # ceil(log2(1000)) = 10 binary fraction digits
+same "8 o 2 k 1 3 / p"    ".250"
+same "16 o 15.9375 p"     "F.F000"
+same "16 o 2 k 255 v p"   "F.F5"
+same "16 o 2 k 255.5 p"   "FF.8"
+same "16 o 2 k 0.1 0.1 * p"  ".02"
+same "16 i _F.F p"        "-15.9"
+same "15 o 1 k 1 2 / p"   ".7"       # fraction digits: exact ceil(log_base(10^scale))
+same "3 o 7 k 1 2 / p"    ".111111111111111"
+same "11 o 2 k 1 2 / p"   ".55"
+same "7 o 5 k 1 3 / p"    ".222221"
+same "10 o 16 o 255 p 10 o 255 p"  $'FF\n255'
+same "16 i FF 10 o p"     "FF"
+same "16 i FF sa la p"    "255"
+same "16 i [FF p] x"      "255"
+same "2 i 1010 2 o p"     "1010"
+same "[8 p] sa 16 i B A <a"  "8"     # comparisons work in another input base
+same "16 i FF 2 ^ p"      "65025"
+same "16 o 100 2 ^ p"     "2710"
+same "16 i FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF p"  "340282366920938463463374607431768211455"  # long literal
+same "2 i 1111111111111111111111111111111111111111111111111111111111111111 p"  "18446744073709551615"
+same "16 o 65 P"          "A"        # P prints bytes of the integer part, any base
+same "16 o 255 n"         "FF"       # n prints in the output base, no newline
+same "16 o 255 5 f"       $'5\nFF'   # f prints the stack in the output base
+same "16 o 0.00 p"        "0"        # zero prints as 0 whatever its scale
+same "15 o 1 k 1 2 / p"   ".7"       # exact ceil fraction digits, non-power-of-2 base
+same "3 o 7 k 1 2 / p"    ".111111111111111"
+same "2.5 o 5 p"          "101"      # o truncates its operand
+same "2.5 i 5 p"          "5"
+same "1 i 5 p"                       # input base out of range: both error, stdout "5"
+same "17 i 5 p"
+same "1 o 5 p"                       # output base < 2: both error
+same "0 o 5 p"
+same "[a] i 5 p"
+same "[a] o 5 p"
+same "16 i G p"                      # 'G' is not a digit char: both error
+
 # ===== DELIBERATE DIVERGENCES from dc (each pinned, with dc's behavior noted) =====
 
 # rpn exits 1 when any command failed; dc always exits 0. Session continues in both.
@@ -190,6 +252,16 @@ diverges "1000001 k"  ""  "scale too large"  1
 # ignores it.
 # dc: "1 2 =" -> no error, exit 0, empty stdout.
 diverges "1 2 ="  ""  "expected a single-character register name"  1
+
+# The output base is capped at 16 in rpn; dc 1.5.2 accepts larger bases and prints
+# their digits space-separated as two-digit decimals.
+# dc: "17 o 5 p" -> stdout " 05", no error, exit 0.
+diverges "17 o 5 p"  "5"  "output base must be a number between 2 and 16 (inclusive)"  1
+
+# In a base of 10 or less, a multi-character number run containing hex letters
+# keeps the letters' face values in rpn (FF = 165); dc 1.5.2 clamps them to 9 (FF = 99).
+# dc: "FF p" -> stdout "99", no error, exit 0.
+diverges "FF p"  "165"  ""  0
 
 # ===== SUMMARY =====
 

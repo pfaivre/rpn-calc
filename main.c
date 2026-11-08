@@ -39,7 +39,7 @@ SOFTWARE.
 /**
  * Things to be done next:
  * TODO: Read a script file
- * TODO: Support arbitrary input/output radices
+ * TODO: Support stack introspection (z, Z, X) and reading a line (?)
  */
 
 

@@ -25,6 +25,7 @@ SOFTWARE.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include <stdckdint.h>
 
 #include <gmp.h>
@@ -68,75 +69,205 @@ static void num_at_scale(mpz_t r, const Value *v, long s) {
     }
 }
 
-bool number_parse(const char *token, Value *out) {
+int number_digit_value(char c) {
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    return -1;
+}
+
+/** Uppercase the digits of a base > 10 number (mpz_get_str yields a-z) */
+static void uppercase_digits(char *digits) {
+    for (char *d = digits; *d != '\0'; d++)
+        if (*d >= 'a' && *d <= 'z')
+            *d -= 'a' - 'A';
+}
+
+/** r = value of the len digit chars at digits, read positionally in base.
+ * Accumulated in chunks of at most k digits (16*base^k fits an unsigned
+ * long, so k >= 3), one mpz_mul_ui/mpz_add_ui per chunk: O(len/k) mpz ops
+ * instead of O(len), so a long literal stays cheap. Each chunk is scaled by
+ * base^n with n its own digit count (only the last chunk may be shorter
+ * than k). Digit chars keep their face value even when it is >= base. */
+static void acc_digits(mpz_t r, const char *digits, size_t len, long base) {
+    unsigned long b = (unsigned long) base;
+    unsigned long bk = 1;
+    size_t k = 0;
+    // k = largest chunk with 16*base^k fitting an unsigned long: a chunk of
+    // n digits is < 15*base^n (face values are <= 15), so chunk and base^n
+    // both fit
+    while (bk <= ULONG_MAX / 16 / b) {
+        bk *= b;
+        k++;
+    }
+    mpz_set_ui(r, 0);
+    for (size_t i = 0; i < len; ) {
+        size_t n = len - i < k ? len - i : k;
+        unsigned long chunk = 0, bm = 1;  // chunk < b^n, bm = b^n: both fit
+        for (size_t t = 0; t < n; t++) {
+            chunk = chunk * b + (unsigned long) number_digit_value(digits[i + t]);
+            bm *= b;
+        }
+        mpz_mul_ui(r, r, bm);
+        mpz_add_ui(r, r, chunk);
+        i += n;
+    }
+}
+
+/** r = value of the NUL-terminated digit string digits (len chars) read in
+ * base. When every digit's face value is < base, GMP's own parser does the
+ * job (near-linear on long inputs); otherwise acc_digits keeps face values
+ * >= base as-is. An empty string yields 0. */
+static void set_in_base(mpz_t r, const char *digits, size_t len, long base) {
+    bool below = true;
+    for (size_t i = 0; i < len; i++)
+        if (number_digit_value(digits[i]) >= base) {
+            below = false;
+            break;
+        }
+    if (below && len > 0 && mpz_set_str(r, digits, (int) base) == 0)
+        return;
+    acc_digits(r, digits, len, base);  // face value >= base, or empty/rejected
+}
+
+bool number_parse(const char *token, long base, Value *out) {
     bool neg = token[0] == '_';
     const char *p = token + (neg ? 1 : 0);
     const char *dot = strchr(p, '.');
-    long scale = dot ? (long) strlen(dot + 1) : 0;
-    if (scale > MAX_SCALE)
+    long f = dot ? (long) strlen(dot + 1) : 0;  // fraction digit count
+    if (f > MAX_SCALE)
         return false;
 
-    // The digits of the token without the point
+    // The token's digit chars (0-9A-F, at most one '.') as two NUL-terminated
+    // runs: integer digits before the point, fraction digits after it
     size_t len = strlen(p);
-    size_t dlen, bufsize;
-    if (ckd_sub(&dlen, len, dot ? (size_t) 1 : (size_t) 0)
-        || ckd_add(&bufsize, dlen, (size_t) 1))
+    size_t ni = dot ? (size_t) (dot - p) : len;  // integer digit count
+    size_t bufsize;
+    if (ckd_add(&bufsize, len, (size_t) 2))
         rpn_fatal("input too large");
     char *digits = malloc(bufsize);
     if (!digits)
         rpn_fatal("memory allocation error");
-    size_t j = 0;
-    for (size_t i = 0; i < len; i++)
-        if (p[i] != '.')
-            digits[j++] = p[i];
-    digits[j] = '\0';
+    memcpy(digits, p, ni);
+    digits[ni] = '\0';
+    memcpy(digits + ni + 1, dot ? dot + 1 : "", (size_t) f);
+    digits[ni + 1 + (size_t) f] = '\0';
 
-    mpz_t num;
-    mpz_init(num);
-    if (j == 0)
-        mpz_set_ui(num, 0);
-    else
-        mpz_set_str(num, digits, 10);  // all digits: cannot fail
-    if (neg)
-        mpz_neg(num, num);
+    // Integer and fraction values in the input base
+    mpz_t inum, fval;
+    mpz_init(inum);
+    mpz_init(fval);
+    set_in_base(inum, digits, ni, base);
+    set_in_base(fval, digits + ni + 1, (size_t) f, base);
     free(digits);
 
-    number_set(out, num, scale);
+    // Store base 10 internally: value = num / 10^f, with the fraction
+    // truncated to f decimal digits
+    mpz_t num;
+    mpz_init(num);
+    if (f > 0) {
+        mpz_t p10, pb, frac;
+        mpz_init(p10);
+        mpz_init(pb);
+        mpz_init(frac);
+        pow10(p10, f);
+        mpz_ui_pow_ui(pb, (unsigned long) base, (unsigned long) f);
+        mpz_mul(frac, fval, p10);
+        mpz_tdiv_q(frac, frac, pb);  // truncate to f decimal digits
+        mpz_mul(num, inum, p10);
+        mpz_add(num, num, frac);
+        mpz_clear(p10);
+        mpz_clear(pb);
+        mpz_clear(frac);
+    } else {
+        mpz_set(num, inum);
+    }
+    if (neg)
+        mpz_neg(num, num);
+    mpz_clear(inum);
+    mpz_clear(fval);
+
+    number_set(out, num, f);
     mpz_clear(num);
     return true;
 }
 
-void number_print(const Value *v, bool newline) {
+/** Print x in the given base as uppercase digits, zero-padded on the left to
+ * at least min_width digits (mpz_get_str yields a-z for bases > 10) */
+static void print_base_digits(const mpz_t x, int base, long min_width) {
+    size_t bufsize = mpz_sizeinbase(x, base) + 2;  // sign + NUL
+    char *digits = malloc(bufsize);
+    if (!digits)
+        rpn_fatal("memory allocation error");
+    mpz_get_str(digits, base, x);
+    uppercase_digits(digits);
+    for (long pad = min_width - (long) strlen(digits); pad > 0; pad--)
+        putchar('0');
+    fputs(digits, stdout);
+    free(digits);
+}
+
+void number_print(const Value *v, bool newline, long base) {
+    const int b = (int) base;  // 2..16, validated at the i/o boundary
     if (mpz_sgn(v->num) == 0) {
         fputs("0", stdout);  // zero prints as "0", whatever its scale or sign
     } else {
-        size_t bufsize = mpz_sizeinbase(v->num, 10) + 2;  // sign + NUL
-        char *digits = malloc(bufsize);
-        if (!digits)
-            rpn_fatal("memory allocation error");
-        mpz_get_str(digits, 10, v->num);
-        size_t len = strlen(digits);
-        const char *d = digits;
-        if (d[0] == '-') {
-            putchar('-');
-            d++;
-            len--;
-        }
-        long scale = v->scale;
-        if (scale == 0) {
-            fputs(d, stdout);
-        } else if ((size_t) scale < len) {
-            fwrite(d, 1, len - (size_t) scale, stdout);
-            putchar('.');
-            fputs(d + (len - (size_t) scale), stdout);
+        bool neg = mpz_sgn(v->num) < 0;
+        mpz_t ip, rem;
+        mpz_init(ip);
+        mpz_init(rem);
+        if (v->scale > 0) {
+            mpz_t p;
+            mpz_init(p);
+            pow10(p, v->scale);
+            mpz_tdiv_qr(ip, rem, v->num, p);  // rem takes the dividend's sign
+            mpz_clear(p);
         } else {
-            // fewer digits than the scale: no integer part, no leading zero
-            putchar('.');
-            for (long zeros = scale - (long) len; zeros > 0; zeros--)
-                putchar('0');
-            fputs(d, stdout);
+            mpz_set(ip, v->num);
+            mpz_set_ui(rem, 0);
         }
-        free(digits);
+        mpz_abs(ip, ip);
+        mpz_abs(rem, rem);
+        if (neg)
+            putchar('-');
+
+        // Integer part in the output base (no leading zero before the point)
+        if (v->scale == 0 || mpz_sgn(ip) > 0)
+            print_base_digits(ip, b, 1);
+
+        // Fraction: N = ceil(log_base(10^scale)) digits
+        if (v->scale > 0) {
+            mpz_t p10;
+            mpz_init(p10);
+            pow10(p10, v->scale);
+            long n = b == 10 ? v->scale : (long) mpz_sizeinbase(p10, b);
+            if (b != 10) {
+                // mpz_sizeinbase is exact or one too big for non-power-of-2
+                // bases: reduce n to the smallest count with base^n >= 10^scale
+                mpz_t bl;  // bl = base^(n-1)
+                mpz_init(bl);
+                mpz_ui_pow_ui(bl, (unsigned long) base, (unsigned long) (n - 1));
+                while (n > 1 && mpz_cmp(bl, p10) >= 0) {
+                    mpz_tdiv_q_ui(bl, bl, (unsigned long) base);
+                    n--;
+                }
+                mpz_clear(bl);
+            }
+            mpz_t pb, frac;
+            mpz_init(pb);
+            mpz_init(frac);
+            mpz_ui_pow_ui(pb, (unsigned long) base, (unsigned long) n);
+            mpz_mul(frac, rem, pb);
+            mpz_tdiv_q(frac, frac, p10);
+            putchar('.');
+            print_base_digits(frac, b, n);
+            mpz_clear(p10);
+            mpz_clear(pb);
+            mpz_clear(frac);
+        }
+        mpz_clear(ip);
+        mpz_clear(rem);
     }
     if (newline)
         putchar('\n');
