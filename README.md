@@ -45,7 +45,8 @@ stack persists across lines. Spaces, tabs and newlines separate tokens, and
 spaces may be omitted between tokens (`2 3*4+p`). Negative numbers are written
 with an underscore prefix (`_5`). Numbers may have a decimal point (`1.5`,
 `.5`, `1.`); a second `.` starts a new token, so `1..2` is read as `1.` then
-`.2`. A `#` starts a comment that runs to the end
+`.2`. Digits `A`-`F` (uppercase) are number digits too, read in the current
+input base (`i`, default 10). A `#` starts a comment that runs to the end
 of the line. A NUL byte ends the line for the parser: everything after the
 first NUL byte is ignored.
 
@@ -92,6 +93,16 @@ $ ./rpn
 `k` Pops the top value and sets the scale factor to its integer part; it must be a nonnegative number not exceeding 1,000,000, otherwise it is an error and the value stays on the stack.
 
 `K` Pushes the current scale factor.
+
+`i` Pops the top value and sets the input base to its integer part; it must be a number between 2 and 16 inclusive, otherwise it is an error and the value stays on the stack. Number digits are `0`-`9` and `A`-`F` (uppercase; letters keep their face value even in smaller bases), read in the current input base.
+
+`I` Pushes the current input base.
+
+`o` Pops the top value and sets the output base to its integer part; it must be a number between 2 and 16 inclusive (a smaller value reports `output base must be a number greater than 1`), otherwise it is an error and the value stays on the stack. `p`, `n` and `f` print in the output base.
+
+`O` Pushes the current output base.
+
+Numbers are stored in base 10 internally: the input base converts digits at parse time (a fraction of `f` digits is truncated to `f` decimal digits), and the output base converts at print time (the integer part in that base; the fraction with `ceil(log_base(10^scale))` digits). `P` always prints bytes of the integer part, whatever the output base.
 
 `+` and `-` push the result at scale `max` of the two operand scales; `*` pushes `a*b` at scale `min(scale(a)+scale(b), max(scale(a), scale(b), k))`.
 
@@ -166,6 +177,7 @@ For the commands listed above, rpn behaves like dc (checked against GNU dc 1.5.2
 - Registers: `s`/`l`/`S`/`L` on a per-register value stack (with `s` replacing the content, `l` peeking, `L` erroring on an empty register stack, and `l` on an empty register loading 0), and `:`/`;` arrays per register (index on top, missing index loads 0, negative or non-numeric index rejected with the operands kept, values may be strings, a register's stack and array are independent).
 - Conditionals `>r`, `<r`, `=r`, `!>r`, `!<r`, `!=r`: two values popped and compared as numbers (top against second), the register executed as a macro when the condition holds, without being consumed; a string operand reports `non-numeric value` with the operands kept.
 - `q` (quit two levels, exiting the program at the top level or in a directly-called macro) and `Q` (pop a count, quit that many levels, never exit; over-depth counts still quit the available levels and invalid counts are errors, as in dc).
+- Input/output bases `i`/`I`/`o`/`O` in 2..16: digits `0`-`9` and `A`-`F` are read in the input base (letters keep their face value even beyond the base), numbers are stored base 10 internally, and printing converts to the output base — integer part in that base, fraction with `ceil(log_base(10^scale))` digits, uppercase digits, no leading zero before the point, zero as `0`. `P` prints bytes of the integer part in any base.
 - The `-e` option, executed one macro level above the top level as in dc, and reading expressions from standard input without it.
 
 rpn deliberately differs from dc in the following ways:
@@ -174,11 +186,14 @@ rpn deliberately differs from dc in the following ways:
   reads `stack underflow` where dc says `stack empty`.
 - The exit status is 1 if any command failed, where dc always exits 0. The
   session still continues after an error in both programs.
-- No input/output base (`i`, `o`) — input and output are always base 10.
 - The scale factor is capped at 1,000,000 (`scale too large`), where dc would
   try to compute with any scale. An exponent with a fractional part is
   truncated to its integer part, where dc 1.5.2 rejects fractional exponents
   with `exponent too large in raise`.
+- The output base is capped at 16, where dc 1.5.2 accepts larger bases and
+  prints their digits as space-separated two-digit decimals. In bases of 10
+  or less, multi-character runs containing hex letters parse with the letters'
+  face values, where dc 1.5.2 clamps them to 9.
 - An unknown command such as `!` is reported as
   unimplemented, where dc would run it as a shell escape. A `[...]` literal
   not closed on the same line is an error, where dc keeps reading the
@@ -198,7 +213,10 @@ rpn deliberately differs from dc in the following ways:
 
 ## Limitations
 This program is much more basic than dc and currently lacks some notable features like:
-- input/output radices
+- stack introspection (`z` stack depth, `Z` digits of the top value, `X` its scale)
+- reading a line from the standard input at runtime (`?`)
+- script files: positional arguments are not read as scripts, only `-e` and stdin work
+- the shell escape (`!`) is not implemented
 
 ## License
 Copyright 2016-2026 Pierre Faivre. This is free software, and may be redistributed

@@ -875,6 +875,73 @@ test_error_stack "5 _0.5 :a f"  $'-.5\n5'  "array index must be a nonnegative in
 # Scale persists across lines
 test_lines $'2\n.33'  '2 k K p\n1 3 / p\n'
 
+# ===== RADICES (i I o O) =====
+# Numbers are stored base 10 internally; i converts input digits, o converts
+# output. Both default to 10 and persist across lines.
+
+test "16 i FF p"  "255"
+test "16 i 10 p"  "16"
+test "16 o 255 p"  "FF"
+test "16 o _255 p"  "-FF"
+test "2 o 255 p"  "11111111"
+test "16 i F.F p"  "15.9"
+test "16 i F.FF p"  "15.99"
+test "16 i 0.8 p"  ".5"
+test "2 i 1.1 p"  "1.5"
+test "2 i 10 p"  "2"
+test "16 i _FF p"  "-255"
+test "8 i 10 10 + p"  "16"
+test "16 i A B + p"  "21"
+test "16 i FF 2 ^ p"  "65025"
+test "16 o 100 2 ^ p"  "2710"
+
+# I and O push the current bases (printed in the output base)
+test "I p O p"  $'10\n10'
+test "16 i I p"  "16"
+test "16 o O p"  "10"           # 16 in base 16
+test "16 i FF 10 o p"  "FF"
+
+# Fractional output in another base: ceil(log_base(10^scale)) digits
+test "16 o 2 k 1 3 / p"  ".54"
+test "16 o 3 k 1 3 / p"  ".553"
+test "16 o 0.5 p"  ".8"
+test "16 o _0.5 p"  "-.8"
+test "2 o 3 k 1 2 / p"  ".1000000000"
+test "8 o 2 k 1 3 / p"  ".250"
+test "16 o 15.9375 p"  "F.F000"
+test "16 o 2 k 255 v p"  "F.F5"
+test "16 o 2 k 255.5 p"  "FF.8"
+test "16 o 2 k 0.1 0.1 * p"  ".02"
+test "16 i _F.F p"  "-15.9"
+
+# Bases switch back and persist across lines
+test "10 o 16 o 255 p 10 o 255 p"  $'FF\n255'
+test_lines "255"  '16 i FF p\n'
+test_lines "FF"  '16 o\n255 p\n'
+
+# In macros and registers
+test "16 i FF sa la p"  "255"
+test "16 i [FF p] x"  "255"
+test "2 i 1010 2 o p"  "1010"
+test "[8 p] sa 16 i B A <a"  "8"
+
+# P prints bytes of the integer part, independent of the output base
+test_bytes '16 o 255 P\n'  "ff"
+
+# Errors (operands stay on the stack)
+test_error "17 i 5 p"  "input base must be a number between 2 and 16 (inclusive)"
+test_error "1 i 5 p"  "input base must be a number between 2 and 16 (inclusive)"
+test_error "[a] i 5 p"  "input base must be a number between 2 and 16 (inclusive)"
+test_error "1 o 5 p"  "output base must be a number greater than 1"
+test_error "0 o 5 p"  "output base must be a number greater than 1"
+test_error "[a] o 5 p"  "output base must be a number greater than 1"
+test_error "17 o 5 p"  "output base must be a number between 2 and 16 (inclusive)"  # our cap; dc accepts > 16
+test "2.5 o 5 p"  "101"        # o truncates its operand to the integer part
+test "2.5 i 5 p"  "5"
+
+# Lowercase letters are not digits
+test_error "16 i G p"  "'G' unimplemented"
+
 # ===== SUMMARY =====
 
 if [ "$failures" -eq 0 ]; then

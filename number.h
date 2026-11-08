@@ -38,22 +38,30 @@ SOFTWARE.
 #define MAX_SCALE 1000000L
 
 /**
- * Parse a numeric token (optional leading _, digits, at most one '.') into
- * a number value: num holds the digits with the point removed and scale the
- * number of fraction digits, so the value is num / 10^scale
- * @param token The token (guaranteed to match [_]?[0-9]*(\.[0-9]*)? by the
+ * Parse a numeric token (optional leading _, digit chars 0-9A-F, at most one
+ * '.') into a number value, reading the digits in the given input base.
+ * Numbers are stored base 10 internally (value = num / 10^scale): the
+ * integer digits are converted from base, and a fraction of f digits is
+ * truncated to f decimal digits. Digit chars keep their face value (A=10
+ * ... F=15) even when it reaches the base.
+ * @param token The token (guaranteed to match the number shape by the
  * tokenizer)
+ * @param base The current input base (2..16)
  * @param out The number value to fill
  * @return false when the scale exceeds MAX_SCALE
  */
-bool number_parse(const char *token, Value *out);
+bool number_parse(const char *token, long base, Value *out);
 
 /**
- * Print a number in decimal with its scale: no leading zero before the
- * point (.5, not 0.5), trailing fractional digits kept (1.50), and zero
- * always printed as "0" whatever its scale or sign
+ * Print a number in the given output base with its scale: no leading zero
+ * before the point (.5, not 0.5), the fraction printed with
+ * ceil(log_base(10^scale)) digits, and zero always printed as "0" whatever
+ * its scale or sign
+ * @param v The number value
+ * @param newline Whether to append a trailing newline
+ * @param base The current output base (2..16)
  */
-void number_print(const Value *v, bool newline);
+void number_print(const Value *v, bool newline, long base);
 
 /**
  * Print the integer part of a number as a string of bytes, most significant
