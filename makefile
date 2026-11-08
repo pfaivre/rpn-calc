@@ -31,3 +31,7 @@ test: $(PGM)
 		bash ./tests/functional_tests.sh
 		bash ./tests/adversarial_tests.sh
 		bash ./tests/dc_compliance_tests.sh
+
+# Performance comparison against dc (needs dc installed; BENCH_N=1 for a quick run)
+bench: $(PGM)
+		bash ./tests/bench.sh
