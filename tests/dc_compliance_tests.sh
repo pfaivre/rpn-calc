@@ -200,6 +200,8 @@ same "2 i 1010 2 o p"     "1010"
 same "[8 p] sa 16 i B A <a"  "8"     # comparisons work in another input base
 same "16 i FF 2 ^ p"      "65025"
 same "16 o 100 2 ^ p"     "2710"
+same "16 i FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF p"  "340282366920938463463374607431768211455"  # long literal
+same "2 i 1111111111111111111111111111111111111111111111111111111111111111 p"  "18446744073709551615"
 same "16 o 65 P"          "A"        # P prints bytes of the integer part, any base
 same "2.5 o 5 p"          "101"      # o truncates its operand
 same "2.5 i 5 p"          "5"

@@ -25,6 +25,7 @@ SOFTWARE.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include <stdckdint.h>
 
 #include <gmp.h>
@@ -82,6 +83,53 @@ static void uppercase_digits(char *digits) {
             *d -= 'a' - 'A';
 }
 
+/** r = value of the len digit chars at digits, read positionally in base.
+ * Accumulated in chunks of at most k digits (16*base^k fits an unsigned
+ * long, so k >= 3), one mpz_mul_ui/mpz_add_ui per chunk: O(len/k) mpz ops
+ * instead of O(len), so a long literal stays cheap. Each chunk is scaled by
+ * base^n with n its own digit count (only the last chunk may be shorter
+ * than k). Digit chars keep their face value even when it is >= base. */
+static void acc_digits(mpz_t r, const char *digits, size_t len, long base) {
+    unsigned long b = (unsigned long) base;
+    unsigned long bk = 1;
+    size_t k = 0;
+    // k = largest chunk with 16*base^k fitting an unsigned long: a chunk of
+    // n digits is < 15*base^n (face values are <= 15), so chunk and base^n
+    // both fit
+    while (bk <= ULONG_MAX / 16 / b) {
+        bk *= b;
+        k++;
+    }
+    mpz_set_ui(r, 0);
+    for (size_t i = 0; i < len; ) {
+        size_t n = len - i < k ? len - i : k;
+        unsigned long chunk = 0, bm = 1;  // chunk < b^n, bm = b^n: both fit
+        for (size_t t = 0; t < n; t++) {
+            chunk = chunk * b + (unsigned long) digit_value(digits[i + t]);
+            bm *= b;
+        }
+        mpz_mul_ui(r, r, bm);
+        mpz_add_ui(r, r, chunk);
+        i += n;
+    }
+}
+
+/** r = value of the NUL-terminated digit string digits (len chars) read in
+ * base. When every digit's face value is < base, GMP's own parser does the
+ * job (near-linear on long inputs); otherwise acc_digits keeps face values
+ * >= base as-is. An empty string yields 0. */
+static void set_in_base(mpz_t r, const char *digits, size_t len, long base) {
+    bool below = true;
+    for (size_t i = 0; i < len; i++)
+        if (digit_value(digits[i]) >= base) {
+            below = false;
+            break;
+        }
+    if (below && len > 0 && mpz_set_str(r, digits, (int) base) == 0)
+        return;
+    acc_digits(r, digits, len, base);  // face value >= base, or empty/rejected
+}
+
 bool number_parse(const char *token, long base, Value *out) {
     bool neg = token[0] == '_';
     const char *p = token + (neg ? 1 : 0);
@@ -90,20 +138,28 @@ bool number_parse(const char *token, long base, Value *out) {
     if (f > MAX_SCALE)
         return false;
 
-    // Integer digits in the input base; fraction digits collected as a
-    // base-`base` value over f digits
+    // The token's digit chars (0-9A-F, at most one '.') as two NUL-terminated
+    // runs: integer digits before the point, fraction digits after it
+    size_t len = strlen(p);
+    size_t ni = dot ? (size_t) (dot - p) : len;  // integer digit count
+    size_t bufsize;
+    if (ckd_add(&bufsize, len, (size_t) 2))
+        rpn_fatal("input too large");
+    char *digits = malloc(bufsize);
+    if (!digits)
+        rpn_fatal("memory allocation error");
+    memcpy(digits, p, ni);
+    digits[ni] = '\0';
+    memcpy(digits + ni + 1, dot ? dot + 1 : "", (size_t) f);
+    digits[ni + 1 + (size_t) f] = '\0';
+
+    // Integer and fraction values in the input base
     mpz_t inum, fval;
-    mpz_init_set_ui(inum, 0);
-    mpz_init_set_ui(fval, 0);
-    bool in_frac = false;
-    for (const char *c = p; *c != '\0'; c++) {
-        if (*c == '.') {
-            in_frac = true;
-            continue;
-        }
-        mpz_mul_ui(in_frac ? fval : inum, in_frac ? fval : inum, (unsigned long) base);
-        mpz_add_ui(in_frac ? fval : inum, in_frac ? fval : inum, (unsigned long) digit_value(*c));
-    }
+    mpz_init(inum);
+    mpz_init(fval);
+    set_in_base(inum, digits, ni, base);
+    set_in_base(fval, digits + ni + 1, (size_t) f, base);
+    free(digits);
 
     // Store base 10 internally: value = num / 10^f, with the fraction
     // truncated to f decimal digits

@@ -948,6 +948,13 @@ test "2.5 i 5 p"  "5"
 # Lowercase letters are not digits
 test_error "16 i G p"  "'G' unimplemented"
 
+# Long literals parse correctly (chunked accumulation, not per-digit) and
+# stay fast: 32 F's in base 16, 64 ones in base 2, and 27 F's in base 10
+# keeping their face value across chunk boundaries
+test "16 i FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF p"  "340282366920938463463374607431768211455"
+test "2 i 1111111111111111111111111111111111111111111111111111111111111111 p"  "18446744073709551615"
+test "FFFFFFFFFFFFFFFFFFFFFFFFFFF p"  "1666666666666666666666666665"
+
 # ===== SUMMARY =====
 
 if [ "$failures" -eq 0 ]; then
