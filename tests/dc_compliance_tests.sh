@@ -207,6 +207,11 @@ same "16 o 100 2 ^ p"     "2710"
 same "16 i FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF p"  "340282366920938463463374607431768211455"  # long literal
 same "2 i 1111111111111111111111111111111111111111111111111111111111111111 p"  "18446744073709551615"
 same "16 o 65 P"          "A"        # P prints bytes of the integer part, any base
+same "16 o 255 n"         "FF"       # n prints in the output base, no newline
+same "16 o 255 5 f"       $'5\nFF'   # f prints the stack in the output base
+same "16 o 0.00 p"        "0"        # zero prints as 0 whatever its scale
+same "15 o 1 k 1 2 / p"   ".7"       # exact ceil fraction digits, non-power-of-2 base
+same "3 o 7 k 1 2 / p"    ".111111111111111"
 same "2.5 o 5 p"          "101"      # o truncates its operand
 same "2.5 i 5 p"          "5"
 same "1 i 5 p"                       # input base out of range: both error, stdout "5"

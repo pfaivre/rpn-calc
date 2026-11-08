@@ -142,7 +142,7 @@ static Stack _calc_num_binop(Stack s, NumberBinop op) {
 }
 
 /**
- * Print a value in decimal: a string as-is, a number with its scale
+ * Print a value in the output base: a string as-is, a number with its scale
  * @param v Value to print
  * @param newline Whether to append a trailing newline
  */

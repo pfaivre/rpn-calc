@@ -943,6 +943,12 @@ test "[8 p] sa 16 i B A <a"  "8"
 # P prints bytes of the integer part, independent of the output base
 test_bytes '16 o 255 P\n'  "ff"
 
+# n and f print in the output base too; zero prints as 0 whatever its scale
+test "16 o 255 n"  "FF"
+test "16 o 255 5 f"  $'5\nFF'
+test "16 o 0.00 p"  "0"
+test "2 o _0.000 p"  "0"
+
 # Errors (operands stay on the stack)
 test_error "17 i 5 p"  "input base must be a number between 2 and 16 (inclusive)"
 test_error "1 i 5 p"  "input base must be a number between 2 and 16 (inclusive)"
@@ -956,6 +962,14 @@ test "2.5 i 5 p"  "5"
 
 # Lowercase letters are not digits
 test_error "16 i G p"  "'G' unimplemented"
+
+# i/o with no operand, a negative or a huge (non-slong) operand
+test_error "i"  "stack underflow"
+test_error "o"  "stack underflow"
+test_error "_5 i 5 p"  "input base must be a number between 2 and 16 (inclusive)"
+test_error "_5 o 5 p"  "output base must be a number greater than 1"
+test_error "99999999999999999999 i 5 p"  "input base must be a number between 2 and 16 (inclusive)"
+test_error "99999999999999999999 o 5 p"  "output base must be a number greater than 1"
 
 # Long literals parse correctly (chunked accumulation, not per-digit) and
 # stay fast: 32 F's in base 16, 64 ones in base 2, and 27 F's in base 10
