@@ -985,7 +985,9 @@ test "1 2 3 z f"  $'3\n3\n2\n1'
 test "1 z f"  $'1\n1'
 
 # Z pops and pushes the decimal digit count of a number (sign and point not
-# counted), or the character count of a string
+# counted), or the character count of a string. The values 8, 9, 64, 512, 99
+# and 99999999999999999999 pin the exact count: mpz_sizeinbase(_, 10) is
+# one too big for them, so they catch an uncorrected upper bound.
 test "123 Z p"  "3"
 test "0 Z p"  "1"
 test "_12 Z p"  "2"
@@ -993,7 +995,17 @@ test "100 Z p"  "3"
 test "1.50 Z p"  "3"
 test ".5 Z p"  "1"
 test "[hello] Z p"  "5"
+test "[] Z p"  "0"
 test "2 10 ^ Z p"  "4"
+test "8 Z p"  "1"
+test "9 Z p"  "1"
+test "64 Z p"  "2"
+test "512 Z p"  "3"
+test "99 Z p"  "2"
+test "10 Z p"  "2"
+test "_1.50 Z p"  "3"
+test "99999999999999999999 Z p"  "20"
+test "16 o 8 Z p"  "1"
 test_error "Z"  "stack underflow"
 
 # X pops and pushes the scale of the value (0 for a string)

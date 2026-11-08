@@ -92,6 +92,15 @@ int number_cmp(const Value *a, const Value *b);
 void number_int_part(const Value *v, mpz_t out);
 
 /**
+ * The length of a value: the number of decimal digits of a number (the sign
+ * and the point are not counted; at least 1, even for 0), or the number of
+ * characters of a string
+ * @param v The value to measure
+ * @return The length of the value
+ */
+long number_length(const Value *v);
+
+/**
  * The scale factor from a value (its integer part), for the k command: must be
  * a nonnegative number not exceeding MAX_SCALE
  * @param v The value to read the scale from
