@@ -151,8 +151,11 @@ rpn deliberately differs from dc in the following ways:
   into the string.
 - The register name is the next token, so `s a` names register `a`, where dc
   reads the very next character and would name a register after the space.
-  Array indices are arbitrary precision, where dc 1.5.2 punts on indices
-  beyond an unsigned long.
+  A `#` comment is never a register name: `s # ...` reports `expected a
+  single-character register name`, where dc names a register after the space
+  and treats the rest of the line as a comment (and compact `s#` in dc names
+  register `#`). Array indices are arbitrary precision, where dc 1.5.2 punts
+  on indices beyond an unsigned long.
 
 - A positive exponent that does not fit in an unsigned long, or whose result
   would exceed 32 MiB, is rejected with `exponent too large in raise`, while

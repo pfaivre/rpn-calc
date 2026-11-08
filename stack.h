@@ -82,6 +82,25 @@ void value_clear(Value *v);
 
 [[nodiscard]] Stack stack_pop(Stack, Value *);
 
+/**
+ * Move the top value of one stack onto another: pop it from `from` and push
+ * a copy onto `to`. Callers must guard `from` with stack_hasAtLeast.
+ * @param from Stack to take the value from
+ * @param to Stack to push the value onto
+ */
+void stack_move_top(Stack from, Stack to);
+
+/**
+ * Double the capacity of a heap array that has run full, with the byte size
+ * checked against overflow (initial capacity 8). Shared by the stack and
+ * register arrays.
+ * @param ptr The array pointer (may be NULL)
+ * @param cap Current capacity, updated to the new capacity
+ * @param elem_size Size of one element in bytes
+ * @return The grown array (realloc may have freed the old pointer)
+ */
+[[nodiscard]] void *checked_grow(void *ptr, size_t *cap, size_t elem_size);
+
 bool stack_hasAtLeast(Stack, int);
 
 [[nodiscard]] Stack stack_clear(Stack);

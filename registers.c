@@ -23,7 +23,6 @@ SOFTWARE.
 */
 
 #include <stdlib.h>
-#include <stdckdint.h>
 
 #include <gmp.h>
 
@@ -95,21 +94,8 @@ void register_array_store(Registers regs, unsigned char name, const mpz_t index,
         }
     }
 
-    if (reg->size == reg->cap) {
-        size_t newcap, bytes;
-        if (reg->cap == 0)
-            newcap = 8;
-        else if (ckd_mul(&newcap, reg->cap, (size_t) 2))
-            rpn_fatal("array too large");
-        if (ckd_mul(&bytes, newcap, sizeof(ArrayEntry)))
-            rpn_fatal("array too large");
-
-        ArrayEntry *grown = realloc(reg->entries, bytes);
-        if (!grown)
-            rpn_fatal("memory allocation error");
-        reg->entries = grown;
-        reg->cap = newcap;
-    }
+    if (reg->size == reg->cap)
+        reg->entries = checked_grow(reg->entries, &reg->cap, sizeof(ArrayEntry));
 
     mpz_init_set(reg->entries[reg->size].index, index);
     reg->entries[reg->size].val = val;  // move

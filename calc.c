@@ -24,6 +24,7 @@ SOFTWARE.
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 #include <ctype.h>
 #include <stdckdint.h>
@@ -46,12 +47,26 @@ SOFTWARE.
 static bool _calc_errorFlag = false;
 
 /**
+ * Report a formatted error on stderr and remember it, so main can exit
+ * non-zero
+ * @param fmt printf-style format (the "rpn: " prefix and newline are added)
+ */
+static void _calc_errorf(const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    fputs("rpn: ", stderr);
+    vfprintf(stderr, fmt, args);
+    fputc('\n', stderr);
+    va_end(args);
+    _calc_errorFlag = true;
+}
+
+/**
  * Report an error on stderr and remember it, so main can exit non-zero
  * @param msg Error message (without the "rpn: " prefix and newline)
  */
 static void _calc_error(const char *msg) {
-    fprintf(stderr, "rpn: %s\n", msg);
-    _calc_errorFlag = true;
+    _calc_errorf("%s", msg);
 }
 
 /**
@@ -166,6 +181,29 @@ static void _calc_print_bytes(const mpz_t num) {
 static Stack _calc_parse_depth(Stack s, Registers regs, char *string, int depth);
 
 /**
+ * Whether a value is usable as an array index: a nonnegative integer
+ * @param v Value to inspect
+ * @return true when v is a number greater than or equal to 0
+ */
+static bool _calc_is_index(const Value *v) {
+    return v->kind == VAL_NUM && mpz_sgn(v->num) >= 0;
+}
+
+/**
+ * Push the number 0 onto the stack (dc's load of an empty register or of a
+ * never-stored array cell)
+ * @param s Stack to modify
+ * @return The stack with 0 on top
+ */
+static Stack _calc_push_zero(Stack s) {
+    mpz_t zero;
+    mpz_init_set_ui(zero, 0);
+    s = stack_push_num(s, zero);
+    mpz_clear(zero);
+    return s;
+}
+
+/**
  * Performs a register command (s, l, S, L, : or ;), whose register name is
  * given separately (it is the token following the command letter)
  * @param s Stack to modify
@@ -183,12 +221,9 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
                 _calc_error("stack underflow");
                 return s;
             }
-            Value v;
-            s = stack_pop(s, &v);
             Stack rs = register_stack(regs, name);
             rs = stack_clear(rs);
-            rs = stack_push_value(rs, v);
-            value_clear(&v);
+            stack_move_top(s, rs);
             return s;
         }
         // l: push a copy of the register's top value; an empty register
@@ -197,11 +232,7 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
             Stack rs = register_stack(regs, name);
             if (stack_hasAtLeast(rs, 1))
                 return stack_push_value(s, *stack_top(rs));
-            mpz_t zero;
-            mpz_init_set_ui(zero, 0);
-            s = stack_push_num(s, zero);
-            mpz_clear(zero);
-            return s;
+            return _calc_push_zero(s);
         }
         // S: pop the top of the main stack and push it onto the register's
         // own stack
@@ -210,25 +241,17 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
                 _calc_error("stack underflow");
                 return s;
             }
-            Value v;
-            s = stack_pop(s, &v);
-            Stack rs = register_stack(regs, name);
-            rs = stack_push_value(rs, v);
-            value_clear(&v);
+            stack_move_top(s, register_stack(regs, name));
             return s;
         }
         // L: pop the register's stack top and push it onto the main stack
         case 'L': {
             Stack rs = register_stack(regs, name);
             if (!stack_hasAtLeast(rs, 1)) {
-                fprintf(stderr, "rpn: stack register '%c' is empty\n", name);
-                _calc_errorFlag = true;
+                _calc_errorf("stack register '%c' is empty", name);
                 return s;
             }
-            Value v;
-            rs = stack_pop(rs, &v);
-            s = stack_push_value(s, v);
-            value_clear(&v);
+            stack_move_top(rs, s);
             return s;
         }
         // : array store: the top of the main stack is the index, the second
@@ -238,7 +261,7 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
                 _calc_error("stack underflow");
                 return s;
             }
-            if (stack_top(s)->kind != VAL_NUM || mpz_sgn(stack_top(s)->num) < 0) {
+            if (!_calc_is_index(stack_top(s))) {
                 _calc_error("array index must be a nonnegative integer");
                 return s;
             }
@@ -256,7 +279,7 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
                 _calc_error("stack underflow");
                 return s;
             }
-            if (stack_top(s)->kind != VAL_NUM || mpz_sgn(stack_top(s)->num) < 0) {
+            if (!_calc_is_index(stack_top(s))) {
                 _calc_error("array index must be a nonnegative integer");
                 return s;
             }
@@ -265,12 +288,8 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
             const Value *cell = register_array_find(regs, name, index.num);
             if (cell)
                 s = stack_push_value(s, *cell);
-            else {
-                mpz_t zero;
-                mpz_init_set_ui(zero, 0);
-                s = stack_push_num(s, zero);
-                mpz_clear(zero);
-            }
+            else
+                s = _calc_push_zero(s);
             value_clear(&index);
             return s;
         }
@@ -514,8 +533,7 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
         return s;
     }
 
-    fprintf(stderr, "rpn: '%s' unimplemented\n", command);
-    _calc_errorFlag = true;
+    _calc_errorf("'%s' unimplemented", command);
     return s;
 }
 
@@ -607,6 +625,25 @@ static char *_calc_firstToken(char *token, char *str, bool *is_string) {
 }
 
 /**
+ * Fetch the register name following a register command letter (the next
+ * token, with or without a separating space). A comment is never a name:
+ * a '#' token means the rest of the line is a comment, so the command is
+ * left without a name.
+ * @param ptr Input position, advanced past the name token
+ * @param token Token buffer, overwritten with the name token
+ * @return The register name, or -1 when there is none (error reported)
+ */
+static int _calc_register_name(char **ptr, char *token) {
+    bool is_string;
+    *ptr = _calc_firstToken(token, *ptr, &is_string);
+    if (*ptr == NULL || is_string || token[0] == '#' || token[1] != '\0') {
+        _calc_error("expected a single-character register name");
+        return -1;
+    }
+    return (unsigned char) token[0];
+}
+
+/**
  * Performs a set of commands (e.g. "2 3*p") at a given macro nesting depth
  * @param s Stack to modify
  * @param regs Register file to modify
@@ -638,17 +675,15 @@ static Stack _calc_parse_depth(Stack s, Registers regs, char* string, int depth)
             break;
 
         // Register commands (s, l, S, L, : and ;) take the register name as
-        // the next token; the name may be written with or without a
-        // separating space (sa and s a both name register a)
-        if (token[1] == '\0' && strchr("slSL:;", token[0]) != NULL) {
+        // the next token, with or without a separating space (sa and s a
+        // both name register a). Such a token is always a single char: the
+        // tokenizer splits after any non-digit.
+        if (strchr("slSL:;", token[0]) != NULL) {
             char cmd = token[0];
-            bool name_is_string;
-            ptr = _calc_firstToken(token, ptr, &name_is_string);
-            if (ptr == NULL || name_is_string || token[1] != '\0') {
-                _calc_error("expected a single-character register name");
+            int name = _calc_register_name(&ptr, token);
+            if (name < 0)
                 break;
-            }
-            s = _calc_register_cmd(s, regs, cmd, (unsigned char) token[0]);
+            s = _calc_register_cmd(s, regs, cmd, (unsigned char) name);
             continue;
         }
 
