@@ -1038,6 +1038,106 @@ if [ "$r" != $'7 p\n7\n7' ]; then
     echo "FAIL -e '? p': expected '7 p\n7\n7', got '$r'"
 fi
 
+# ===== SCRIPT FILES (positional arguments) =====
+# Files run in order after -e; stdin is read after files (or when neither
+# -e nor files are given). stdin is redirected to /dev/null in these tests.
+
+tmpd=$(mktemp -d)
+printf '1 p\n2 2 + p\n' >"$tmpd/a.rpn"
+printf '5 p\n' >"$tmpd/b.rpn"
+printf '1 0 /\n7 p\n' >"$tmpd/bad.rpn"
+printf '8 p' >"$tmpd/nonl.rpn"                          # no trailing newline
+printf '1 p q\n2 p\n' >"$tmpd/q.rpn"
+printf '5 sc [lc p lc 1 - sc 0 lc >m] sm lmx\n' >"$tmpd/loop.rpn"
+
+# files run in order
+tests_run=$((tests_run + 1))
+r=$(./rpn "$tmpd/a.rpn" "$tmpd/b.rpn" </dev/null 2>/dev/null)
+[ "$r" = $'1\n4\n5' ] || { failures=$((failures+1)); echo "FAIL files in order: got '$r'"; }
+
+# -e runs before files
+tests_run=$((tests_run + 1))
+r=$(./rpn -e '9 p' "$tmpd/a.rpn" </dev/null 2>/dev/null)
+[ "$r" = $'9\n1\n4' ] || { failures=$((failures+1)); echo "FAIL -e before files: got '$r'"; }
+
+# stdin is read after files
+tests_run=$((tests_run + 1))
+r=$(printf '7 p\n' | ./rpn "$tmpd/a.rpn" 2>/dev/null)
+[ "$r" = $'1\n4\n7' ] || { failures=$((failures+1)); echo "FAIL stdin after files: got '$r'"; }
+
+# -e alone does not read stdin
+tests_run=$((tests_run + 1))
+r=$(printf '7 p\n' | ./rpn -e '1 p' 2>/dev/null)
+[ "$r" = "1" ] || { failures=$((failures+1)); echo "FAIL -e no stdin: got '$r'"; }
+
+# a missing file is an error (exit 1) but later files still run
+tests_run=$((tests_run + 1))
+r=$(./rpn "$tmpd/nope" "$tmpd/b.rpn" </dev/null 2>"$tmpd/err"); code=$?
+if [ "$r" != "5" ] || [ "$code" != "1" ] || ! grep -q "could not open file" "$tmpd/err"; then
+    failures=$((failures+1)); echo "FAIL missing file: out='$r' code=$code err='$(cat "$tmpd/err")'"
+fi
+
+# an error inside a file does not stop the session
+tests_run=$((tests_run + 1))
+r=$(./rpn "$tmpd/bad.rpn" "$tmpd/b.rpn" </dev/null 2>/dev/null); code=$?
+[ "$r" = $'7\n5' ] && [ "$code" = "1" ] || { failures=$((failures+1)); echo "FAIL error in file: out='$r' code=$code"; }
+
+# no trailing newline, loops in files, q in a file exits
+tests_run=$((tests_run + 1))
+r=$(./rpn "$tmpd/nonl.rpn" </dev/null 2>/dev/null)
+[ "$r" = "8" ] || { failures=$((failures+1)); echo "FAIL no trailing newline: got '$r'"; }
+tests_run=$((tests_run + 1))
+r=$(./rpn "$tmpd/loop.rpn" </dev/null 2>/dev/null)
+[ "$r" = $'5\n4\n3\n2\n1' ] || { failures=$((failures+1)); echo "FAIL loop in file: got '$r'"; }
+tests_run=$((tests_run + 1))
+r=$(./rpn "$tmpd/q.rpn" </dev/null 2>/dev/null)
+[ "$r" = "1" ] || { failures=$((failures+1)); echo "FAIL q in file: got '$r'"; }
+
+# a directory passed as a file argument is a read error (exit 1), not silent EOF
+tests_run=$((tests_run + 1))
+r=$(./rpn "$tmpd" </dev/null 2>"$tmpd/err"); code=$?
+if [ -n "$r" ] || [ "$code" != "1" ] || ! grep -q "could not read" "$tmpd/err"; then
+    failures=$((failures+1)); echo "FAIL directory arg: out='$r' code=$code err='$(cat "$tmpd/err")'"
+fi
+
+rm -rf "$tmpd"
+
+# ===== | (MODULAR EXPONENTIATION) =====
+# Pops modulus (top), exponent, base: computes b^e mod m. Base and exponent
+# are truncated to their integer parts; the modulus keeps its scale. Result
+# scale is max(scale(base), scale(modulus)). Works with huge exponents.
+
+test "2 3 5 | p"  "3"
+test "2 0 5 | p"  "1"
+test "0 0 5 | p"  "1"
+test "2 3 1 | p"  "0"
+test "3 0 1 | p"  "0"          # e=0, m=1: correct 0 (dc 1.5.2 gives 1)
+test "0 5 3 | p"  "0"
+test "7 0 3 | p"  "1"
+test "10 100 7 | p"  "4"
+test "123456789 987654321 1000000007 | p"  "652541198"
+test "2 3 _5 | p"  "3"          # negative modulus
+test "_2 3 5 | p"  "-3"         # negative base, odd exponent
+test "_2 2 5 | p"  "4"          # negative base, even exponent
+test "2.5 3 5 | p"  "3.0"       # base truncated, keeps its scale
+test "2 3.9 5 | p"  "3"         # exponent truncated
+test "2 3 5.0 | p"  "3.0"
+test "2 3 5.5 | p"  "2.5"       # fractional modulus participates
+test "2.5 3 5.00 | p"  "3.00"
+test "2 99999999999999999999999999 5 | p"  "3"    # huge exponent
+test "2 1000000000000000000000 97 | p"  "61"
+test "2 3 5 | f"  "3"
+test "1 2 3 4 | p"  "0"         # pops 4,3,2: 2^3 mod 4 = 0
+test "[2 3 5 | p] x"  "3"
+test "5 sa 2 3 la | p"  "3"
+test "16 o 255 8 257 | p"  "100"        # 255^8 mod 257 = 256 = 0x100
+test_error "2 3 0 |"  "remainder by zero"
+test_error "2 _3 5 |"  "exponent must be non-negative"
+test_error "|"  "stack underflow"
+test_error "1 2 |"  "stack underflow"
+test_error_stack "2 3 0 | f"  $'0\n3\n2'  "remainder by zero"
+test_error "[a] 2 3 |"  "non-numeric value"
+
 # ===== SUMMARY =====
 
 if [ "$failures" -eq 0 ]; then

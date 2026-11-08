@@ -44,16 +44,17 @@ SOFTWARE.
 }
 
 /**
- * Read one line from the standard input (until newline or EOF).
+ * Read one line from a stream (until newline or EOF).
  * The line can have arbitrary length and may contain NUL bytes; the
  * parser only sees up to the first NUL.
+ * @param stream The stream to read from
  * @return A newly allocated string holding the line without its trailing
  *         newline, an empty string for an empty line, or NULL at EOF
  */
-char *read_line(void) {
+char *read_line_stream(FILE *stream) {
     char *line = NULL;
     size_t cap = 0;
-    ssize_t len = getline(&line, &cap, stdin);
+    ssize_t len = getline(&line, &cap, stream);
 
     if (len < 0) {
         free(line);
@@ -62,6 +63,14 @@ char *read_line(void) {
     if (len > 0 && line[len - 1] == '\n')
         line[--len] = '\0';
     return line;
+}
+
+/**
+ * Read one line from the standard input
+ * @return A newly allocated string, or NULL at EOF (see read_line_stream)
+ */
+char *read_line(void) {
+    return read_line_stream(stdin);
 }
 
 /**
@@ -74,10 +83,11 @@ bool stdin_is_tty(void) {
 }
 
 void printUsage(const char *progName) {
-    printf("Usage: %s [OPTION]\n", progName);
+    printf("Usage: %s [OPTION] [file...]\n", progName);
     puts("  -e, --expression=EXPR    evaluate expression");
     puts("  -h, --help               display this help and exit");
     puts("  -V, --version            output version information and exit");
+    puts("  file...                  read and execute script files, in order");
 }
 
 void printVersion(const char *version, const char *copyright) {

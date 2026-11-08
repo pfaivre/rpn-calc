@@ -1,10 +1,10 @@
 # rpn-calc [![Build and test](https://github.com/pfaivre/rpn-calc/actions/workflows/build-test.yml/badge.svg?branch=master)](https://github.com/pfaivre/rpn-calc/actions/workflows/build-test.yml)
-A humble dc clone
+A humble dc clone, almost entirely compliant with it, with an emphasis on arithmetic correctness and execution safety.
 
 ## Synopsis
 ```sh
 rpn [-V] [--version] [-h] [--help]
-    [-e scriptexpression] [--expression=scriptexpression]
+    [-e scriptexpression] [--expression=scriptexpression] [file...]
 ```
 
 ## Description
@@ -37,11 +37,21 @@ Print a usage message briefly summarizing these command-line options, then exit.
 -e, --expression=script
 ```
 Add the commands in script to the set of commands to be run. Multiple `-e`
-options are concatenated.
+options are concatenated. `-e` expressions run before any script files.
+
+```sh
+file...
+```
+Read and execute each script file, in order, one line at a time (like standard
+input lines; the stack, registers, scale and bases persist across files). An
+unreadable file is an error but does not stop the session. After script files,
+standard input is read (as in dc); with `-e` and no files, standard input is
+not read.
 
 ## Input
-Without `-e`, expressions are read from the standard input, one per line; the
-stack persists across lines. Spaces, tabs and newlines separate tokens, and
+Without `-e` or files, expressions are read from the standard input, one per
+line; the stack persists across lines. With script files, they are read first
+(in order) and the standard input follows them. Spaces, tabs and newlines separate tokens, and
 spaces may be omitted between tokens (`2 3*4+p`). Negative numbers are written
 with an underscore prefix (`_5`). Numbers may have a decimal point (`1.5`,
 `.5`, `1.`); a second `.` starts a new token, so `1..2` is read as `1.` then
@@ -63,6 +73,17 @@ as `gmp` on Arch Linux.
 ```sh
 $ make
 $ ./rpn
+```
+
+## Examples
+`examples/demo.rpn` tours most commands — arithmetic, scale, bases, stack
+operations, strings, macros, registers, arrays, conditionals, loops, `q`/`Q`.
+`examples/fibonacci.rpn` is a small loop demo. Both run identically under rpn
+and GNU dc, and are exercised by the dc compliance suite:
+
+```sh
+$ ./rpn examples/demo.rpn
+$ dc examples/demo.rpn
 ```
 
 ## Commands
@@ -89,6 +110,8 @@ $ ./rpn
 `^` Pops two values off the stack, uses the first (truncated to its integer part) as the exponent and the second as the base and pushes the result on the stack. The result scale is `min(scale(base)*n, max(scale(base), k))` for a positive exponent `n`, and `k` for a negative one. A positive exponent whose result would exceed 32 MiB is rejected with an error and the operands stay on the stack.
 
 `v` Pops one value, computes its square root truncated down at scale `max(scale(a), k)`, and pushes the result to the stack.
+
+`|` Pops three values — the modulus (top), the exponent, and the base — and pushes `base^exponent mod modulus`. The base and exponent are truncated to their integer parts; the modulus is used with its scale. The result scale is `max(scale(base), scale(modulus))`, and arbitrarily large exponents are supported. A zero modulus reports `remainder by zero`; a negative exponent reports `exponent must be non-negative`.
 
 `k` Pops the top value and sets the scale factor to its integer part; it must be a nonnegative number not exceeding 1,000,000, otherwise it is an error and the value stays on the stack.
 
@@ -187,6 +210,7 @@ For the commands listed above, rpn behaves like dc (checked against GNU dc 1.5.2
 - `q` (quit two levels, exiting the program at the top level or in a directly-called macro) and `Q` (pop a count, quit that many levels, never exit; over-depth counts still quit the available levels and invalid counts are errors, as in dc).
 - Input/output bases `i`/`I`/`o`/`O` in 2..16: digits `0`-`9` and `A`-`F` are read in the input base (letters keep their face value even beyond the base), numbers are stored base 10 internally, and printing converts to the output base — integer part in that base, fraction with `ceil(log_base(10^scale))` digits, uppercase digits, no leading zero before the point, zero as `0`. `P` prints bytes of the integer part in any base.
 - Stack introspection: `z` pushes the stack depth, `Z` pops and pushes the decimal digit count of a number (or character count of a string), `X` pops and pushes the scale of the value.
+- `|` modular exponentiation: `b^e mod m` with arbitrarily large exponents; the base and exponent are truncated to integers, the modulus keeps its scale, and the result scale is `max(scale(base), scale(modulus))`.
 - The `-e` option, executed one macro level above the top level as in dc, and reading expressions from standard input without it.
 
 rpn deliberately differs from dc in the following ways:
@@ -203,9 +227,19 @@ rpn deliberately differs from dc in the following ways:
   prints their digits as space-separated two-digit decimals. In bases of 10
   or less, multi-character runs containing hex letters parse with the letters'
   face values, where dc 1.5.2 clamps them to 9.
-- An unknown command such as `!` is reported as
-  unimplemented, where dc would run it as a shell escape. A `[...]` literal
-  not closed on the same line is an error, where dc keeps reading the
+- With a nonzero scale factor `k`, dc 1.5.2's `|` returns 0 (a bug — its manual
+  says `|` is like `Sm^Lm%`, which at k=2 gives 3.00); rpn computes the true
+  modular exponentiation. Non-integer `|` operands are truncated silently,
+  where dc prints a runtime warning. At scale 0 with exponent 0 and modulus
+  ±1 (`b 0 1 |`), dc 1.5.2 returns 1 while rpn returns the correct 0, matching
+  dc's own `Sm^Lm%` semantics (`0 0 ^ 1 % p` is 0 in dc).
+- The shell escape (`!`) is deliberately not implemented: in dc it runs the
+  rest of the line through the shell, which would let a script file or a
+  pasted expression execute arbitrary commands. rpn reports `!` as
+  unimplemented. This is a security boundary, not a missing feature (see
+  "Security" below).
+- An unknown command such as `w` is reported as unimplemented. A `[...]`
+  literal not closed on the same line is an error, where dc keeps reading the
   following lines into the string.
 - The register name is the next character after any whitespace, so `s a`
   names register `a`, where dc reads the very next character and would name
@@ -221,10 +255,28 @@ rpn deliberately differs from dc in the following ways:
   a huge negative exponent is computed exactly (0, 1 or _1), where dc gives
   up with the same error.
 
-## Limitations
-This program is much more basic than dc and currently lacks some notable features like:
-- script files: positional arguments are not read as scripts, only `-e` and stdin work
-- the shell escape (`!`) is not implemented
+## Security
+
+rpn's input can come from untrusted sources (script files, piped standard
+input), so the parser and evaluator are built to fail safely instead of
+crashing or executing anything:
+
+- No shell escape (`!`): calculator input never spawns a process.
+- Bounded memory and result size, rejected with a graceful error rather than
+  exhausting memory or the C stack: the scale factor is capped at 1,000,000
+  (`k`), `^` results at 32 MiB, and macro nesting at 1,000 levels (`x`,
+  conditionals, `?`). (`|` keeps its result smaller than the modulus, but its
+  running time grows with the exponent's bit length, as in dc.)
+- Every size computation that feeds an allocation uses checked arithmetic
+  (`<stdckdint.h>`); allocation failures are fatal, clean errors.
+- Errors are reported on stderr and the session continues; the exit status
+  is 1 if anything failed, so scripts can detect failure.
+- `tests/adversarial_tests.sh` (run by `make test`, and by CI under
+  ASan/UBSan with leak detection) targets these flaw classes directly:
+  capacity-boundary aliasing, self-executing and deeply nested macros,
+  exponent allocation bombs, `|` modular-exponentiation stress, non-numeric
+  operands on every numeric command, 100 KB tokens, the `P` byte-export path,
+  a 100k-push realloc stress, and a fixed-seed fuzz smoke test.
 
 ## License
 Copyright 2016-2026 Pierre Faivre. This is free software, and may be redistributed

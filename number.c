@@ -622,6 +622,51 @@ const char *number_pow(const Value *base, const Value *exp, long k, Value *out) 
     return err;
 }
 
+const char *number_powm(const Value *base, const Value *exp, const Value *mod, Value *out) {
+    if (mpz_sgn(mod->num) == 0)
+        return "remainder by zero";
+    mpz_t bi, ei;
+    mpz_init(bi);
+    mpz_init(ei);
+    number_int_part(base, bi);
+    number_int_part(exp, ei);
+    if (mpz_sgn(ei) < 0) {
+        mpz_clear(bi);
+        mpz_clear(ei);
+        return "exponent must be non-negative";
+    }
+
+    // r = sign(b^e) * (|b|^e * 10^sm mod |mn|), at scale rs = max(sa, sm);
+    // the tdiv-style remainder takes the sign of the power, as in dc
+    long rs = base->scale > mod->scale ? base->scale : mod->scale;
+    mpz_t mn, r0, t;
+    mpz_init(mn);
+    mpz_init(r0);
+    mpz_init(t);
+    mpz_abs(mn, mod->num);
+    bool neg_base = mpz_sgn(bi) < 0;
+    mpz_abs(bi, bi);
+    mpz_powm(r0, bi, ei, mn);            // |b|^e mod |mn| (mod != 0, exp >= 0)
+    if (mod->scale > 0) {
+        pow10(t, mod->scale);
+        mpz_mul(r0, r0, t);
+        mpz_mod(r0, r0, mn);           // ... * 10^sm mod |mn|
+    }
+    if (neg_base && mpz_odd_p(ei))
+        mpz_neg(r0, r0);               // negative base to an odd power
+    if (rs > mod->scale) {
+        pow10(t, rs - mod->scale);
+        mpz_mul(r0, r0, t);
+    }
+    number_set(out, r0, rs);
+    mpz_clear(bi);
+    mpz_clear(ei);
+    mpz_clear(mn);
+    mpz_clear(r0);
+    mpz_clear(t);
+    return NULL;
+}
+
 const char *number_sqrt(const Value *a, long k, Value *out) {
     if (mpz_sgn(a->num) < 0)
         return "square root of negative number";

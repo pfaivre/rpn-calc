@@ -130,6 +130,16 @@ expect_err "d" "stack underflow"
 expect_err "x" "stack underflow"
 expect_err "P" "stack underflow"
 
+# ===== | (modular exponentiation) stress =====
+# A large exponent and modulus must complete without crashing or exhausting
+# memory (the result stays below the modulus). Running time grows with the
+# exponent's bit length, so this is kept bounded for the test suite.
+big_e=$(printf '9%.0s' $(seq 1 2000))
+big_m=$(printf '9%.0s' $(seq 1 2000))
+expect_ok "2 ${big_e} ${big_m} | c"
+expect_err "2 3 0 |" "remainder by zero"
+expect_err "[s] 2 3 |" "non-numeric value"
+
 # ===== Deterministic fuzz smoke =====
 # Fixed-seed token soup: any crash (exit >= 128) fails; runtime errors (exit
 # 1) are fine. The seed is fixed, so this input is identical on every run.

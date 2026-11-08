@@ -122,4 +122,18 @@ const char *number_divmod(const Value *a, const Value *b, long k, Value *q, Valu
 const char *number_pow(const Value *a, const Value *b, long k, Value *out);
 const char *number_sqrt(const Value *a, long k, Value *out);
 
+/**
+ * Modular exponentiation (dc's |): computes base^exp mod mod, with the
+ * operands passed as (base, exponent, modulus). The base and exponent are
+ * truncated to their integer parts; the modulus is used with its scale.
+ * The result scale is max(scale(base), scale(modulus)). Works with
+ * arbitrarily large exponents.
+ * @param base The base
+ * @param exp The exponent
+ * @param mod The modulus
+ * @param out The result, set on success and untouched on error
+ * @return NULL on success or an error message
+ */
+const char *number_powm(const Value *base, const Value *exp, const Value *mod, Value *out);
+
 #endif

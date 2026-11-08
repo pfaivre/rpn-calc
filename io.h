@@ -25,9 +25,14 @@ SOFTWARE.
 #ifndef IO_H
 #define IO_H
 
+#include <stdio.h>
+
 [[noreturn]] void rpn_fatal(const char *msg);
 
 char *read_line(void);
+
+/** Read one line from a stream (until newline or EOF), like read_line */
+char *read_line_stream(FILE *stream);
 
 /** Whether the standard input is a terminal (which already echoes input) */
 bool stdin_is_tty(void);
