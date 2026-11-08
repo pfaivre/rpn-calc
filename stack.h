@@ -67,6 +67,9 @@ static inline Value *stack_top(Stack s) { return &s->vals[s->size - 1]; }
 /** The value just below the top (only valid with at least two values) */
 static inline Value *stack_second(Stack s) { return &s->vals[s->size - 2]; }
 
+/** The third value from the top (only valid with at least three values) */
+static inline Value *stack_third(Stack s) { return &s->vals[s->size - 3]; }
+
 Stack stack_init();
 
 /** Release the resources held by a value (mpz_clear or free) */

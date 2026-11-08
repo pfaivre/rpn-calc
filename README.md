@@ -100,6 +100,8 @@ $ ./rpn
 
 `v` Pops one value, computes its square root truncated down at scale `max(scale(a), k)`, and pushes the result to the stack.
 
+`|` Pops three values — the modulus (top), the exponent, and the base — and pushes `base^exponent mod modulus`. The base and exponent are truncated to their integer parts; the modulus is used with its scale. The result scale is `max(scale(base), scale(modulus))`, and arbitrarily large exponents are supported. A zero modulus reports `remainder by zero`; a negative exponent reports `exponent must be non-negative`.
+
 `k` Pops the top value and sets the scale factor to its integer part; it must be a nonnegative number not exceeding 1,000,000, otherwise it is an error and the value stays on the stack.
 
 `K` Pushes the current scale factor.
@@ -197,6 +199,7 @@ For the commands listed above, rpn behaves like dc (checked against GNU dc 1.5.2
 - `q` (quit two levels, exiting the program at the top level or in a directly-called macro) and `Q` (pop a count, quit that many levels, never exit; over-depth counts still quit the available levels and invalid counts are errors, as in dc).
 - Input/output bases `i`/`I`/`o`/`O` in 2..16: digits `0`-`9` and `A`-`F` are read in the input base (letters keep their face value even beyond the base), numbers are stored base 10 internally, and printing converts to the output base — integer part in that base, fraction with `ceil(log_base(10^scale))` digits, uppercase digits, no leading zero before the point, zero as `0`. `P` prints bytes of the integer part in any base.
 - Stack introspection: `z` pushes the stack depth, `Z` pops and pushes the decimal digit count of a number (or character count of a string), `X` pops and pushes the scale of the value.
+- `|` modular exponentiation: `b^e mod m` with arbitrarily large exponents; the base and exponent are truncated to integers, the modulus keeps its scale, and the result scale is `max(scale(base), scale(modulus))`.
 - The `-e` option, executed one macro level above the top level as in dc, and reading expressions from standard input without it.
 
 rpn deliberately differs from dc in the following ways:
@@ -213,9 +216,17 @@ rpn deliberately differs from dc in the following ways:
   prints their digits as space-separated two-digit decimals. In bases of 10
   or less, multi-character runs containing hex letters parse with the letters'
   face values, where dc 1.5.2 clamps them to 9.
-- An unknown command such as `!` is reported as
-  unimplemented, where dc would run it as a shell escape. A `[...]` literal
-  not closed on the same line is an error, where dc keeps reading the
+- With a nonzero scale factor `k`, dc 1.5.2's `|` returns 0 (a bug — its manual
+  says `|` is like `Sm^Lm%`, which at k=2 gives 3.00); rpn computes the true
+  modular exponentiation. Non-integer `|` operands are truncated silently,
+  where dc prints a runtime warning.
+- The shell escape (`!`) is deliberately not implemented: in dc it runs the
+  rest of the line through the shell, which would let a script file or a
+  pasted expression execute arbitrary commands. rpn reports `!` as
+  unimplemented. This is a security boundary, not a missing feature (see
+  "Security" below).
+- An unknown command such as `w` is reported as unimplemented. A `[...]`
+  literal not closed on the same line is an error, where dc keeps reading the
   following lines into the string.
 - The register name is the next character after any whitespace, so `s a`
   names register `a`, where dc reads the very next character and would name
@@ -231,8 +242,27 @@ rpn deliberately differs from dc in the following ways:
   a huge negative exponent is computed exactly (0, 1 or _1), where dc gives
   up with the same error.
 
-## Limitations
-This program lacks the shell escape (`!`), which is deliberately not implemented.
+## Security
+
+rpn's input can come from untrusted sources (script files, piped standard
+input), so the parser and evaluator are built to fail safely instead of
+crashing or executing anything:
+
+- No shell escape (`!`): calculator input never spawns a process.
+- Bounded resource use, all rejected with a graceful error rather than
+  exhausting memory or the C stack: the scale factor is capped at 1,000,000
+  (`k`), `^` results at 32 MiB, and macro nesting at 1,000 levels (`x`,
+  conditionals, `?`).
+- Every size computation that feeds an allocation uses checked arithmetic
+  (`<stdckdint.h>`); allocation failures are fatal, clean errors.
+- Errors are reported on stderr and the session continues; the exit status
+  is 1 if anything failed, so scripts can detect failure.
+- `tests/adversarial_tests.sh` (run by `make test`, and by CI under
+  ASan/UBSan with leak detection) targets these flaw classes directly:
+  capacity-boundary aliasing, self-executing and deeply nested macros,
+  exponent allocation bombs, non-numeric operands on every numeric command,
+  100 KB tokens, the `P` byte-export path, a 100k-push realloc stress, and a
+  fixed-seed fuzz smoke test.
 
 ## License
 Copyright 2016-2026 Pierre Faivre. This is free software, and may be redistributed

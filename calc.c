@@ -553,6 +553,36 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
     if (strcmp(command, "^") == 0)
         return _calc_num_binop(s, number_pow);
 
+    // |: modular exponentiation b^e mod m — pops the modulus (top), the
+    // exponent and the base; on error the operands stay on the stack
+    if (strcmp(command, "|") == 0) {
+        if (!stack_hasAtLeast(s, 3)) {
+            _calc_error("stack underflow");
+            return s;
+        }
+        if (stack_top(s)->kind != VAL_NUM || stack_second(s)->kind != VAL_NUM
+            || stack_third(s)->kind != VAL_NUM) {
+            _calc_error("non-numeric value");
+            return s;
+        }
+        Value out;
+        const char *err = number_powm(stack_third(s), stack_second(s), stack_top(s), &out);
+        if (err) {
+            _calc_error(err);
+            return s;
+        }
+        Value m, e, b;
+        s = stack_pop(s, &m);
+        s = stack_pop(s, &e);
+        s = stack_pop(s, &b);
+        value_clear(&m);
+        value_clear(&e);
+        value_clear(&b);
+        s = stack_push_value(s, out);
+        value_clear(&out);
+        return s;
+    }
+
     // Square root
     if (strcmp(command, "v") == 0) {
         if (!stack_hasAtLeast(s, 1)) {

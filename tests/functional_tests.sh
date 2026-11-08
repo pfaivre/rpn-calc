@@ -1095,6 +1095,41 @@ r=$(./rpn "$tmpd/q.rpn" </dev/null 2>/dev/null)
 
 rm -rf "$tmpd"
 
+# ===== | (MODULAR EXPONENTIATION) =====
+# Pops modulus (top), exponent, base: computes b^e mod m. Base and exponent
+# are truncated to their integer parts; the modulus keeps its scale. Result
+# scale is max(scale(base), scale(modulus)). Works with huge exponents.
+
+test "2 3 5 | p"  "3"
+test "2 0 5 | p"  "1"
+test "0 0 5 | p"  "1"
+test "2 3 1 | p"  "0"
+test "0 5 3 | p"  "0"
+test "7 0 3 | p"  "1"
+test "10 100 7 | p"  "4"
+test "123456789 987654321 1000000007 | p"  "652541198"
+test "2 3 _5 | p"  "3"          # negative modulus
+test "_2 3 5 | p"  "-3"         # negative base, odd exponent
+test "_2 2 5 | p"  "4"          # negative base, even exponent
+test "2.5 3 5 | p"  "3.0"       # base truncated, keeps its scale
+test "2 3.9 5 | p"  "3"         # exponent truncated
+test "2 3 5.0 | p"  "3.0"
+test "2 3 5.5 | p"  "2.5"       # fractional modulus participates
+test "2.5 3 5.00 | p"  "3.00"
+test "2 99999999999999999999999999 5 | p"  "3"    # huge exponent
+test "2 1000000000000000000000 97 | p"  "61"
+test "2 3 5 | f"  "3"
+test "1 2 3 4 | p"  "0"         # 3^2 mod 4 = 1? no: pops 4,3,2 -> 2^3 mod 4 = 0
+test "[2 3 5 | p] x"  "3"
+test "5 sa 2 3 la | p"  "3"
+test "16 o 255 8 257 | p"  "100"        # 255^8 mod 257 = 256 = 0x100
+test_error "2 3 0 |"  "remainder by zero"
+test_error "2 _3 5 |"  "exponent must be non-negative"
+test_error "|"  "stack underflow"
+test_error "1 2 |"  "stack underflow"
+test_error_stack "2 3 0 | f"  $'0\n3\n2'  "remainder by zero"
+test_error "[a] 2 3 |"  "non-numeric value"
+
 # ===== SUMMARY =====
 
 if [ "$failures" -eq 0 ]; then

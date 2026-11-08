@@ -279,6 +279,31 @@ same_file "$tmpdir/sbad" "$tmpdir/s2"        # error in a file: both error, sess
 same_file "$tmpdir/snonl"                    # no trailing newline
 same_file "$tmpdir/nope" "$tmpdir/s1"        # missing file: both error, later files still run
 
+# ===== IDENTICAL TO dc: | (modular exponentiation) =====
+same "2 3 5 | p"          "3"
+same "2 0 5 | p"          "1"
+same "0 0 5 | p"          "1"
+same "2 3 1 | p"          "0"
+same "0 5 3 | p"          "0"
+same "10 100 7 | p"       "4"
+same "123456789 987654321 1000000007 | p"  "652541198"
+same "2 3 _5 | p"         "3"        # negative modulus
+same "_2 3 5 | p"         "-3"       # negative base, odd exponent
+same "_2 2 5 | p"         "4"        # negative base, even exponent
+# (scaled-operand cases like "2 3 5.5 | p" are pinned in functional_tests.sh:
+# stdout matches dc, but dc also prints a "Runtime warning" on stderr)
+same "2 99999999999999999999999999 5 | p"  "3"   # huge exponent
+same "2 1000000000000000000000 97 | p"     "61"
+same "2 3 0 |"                        # modulus zero: both error
+same "2 _3 5 |"                       # negative exponent: both error
+same "1 2 |"                          # underflow: both error
+
+# With a nonzero scale factor k, dc 1.5.2 returns 0 from | (its own manual says
+# | is like "Sm^Lm%", which at k=2 gives 3.00, not 0 — a dc bug); rpn computes
+# the true result.
+# dc: "2 k 2 3 5 | p" -> stdout "0", no error, exit 0.
+diverges "2 k 2 3 5 | p"  "3"  ""  0
+
 # ===== DELIBERATE DIVERGENCES from dc (each pinned, with dc's behavior noted) =====
 
 # rpn exits 1 when any command failed; dc always exits 0. Session continues in both.
