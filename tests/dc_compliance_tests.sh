@@ -1,0 +1,202 @@
+#!/bin/bash
+#
+# dc compliance tests for rpn.
+#
+# Two kinds of assertions:
+#   same      EXPR [EXPECTED]  -- rpn and GNU dc must agree: identical stdout
+#                                (dc's 70-column backslash-wrapping is normalized
+#                                away) and both must error or both not error.
+#                                When EXPECTED is given, rpn's stdout is also
+#                                pinned to it.
+#   diverges  EXPR RPN_OUT RPN_ERR_SUBSTR RPN_CODE
+#                             -- pins a deliberate rpn-vs-dc divergence: rpn must
+#                                produce exactly RPN_OUT, an stderr containing
+#                                RPN_ERR_SUBSTR, and exit RPN_CODE, AND dc must
+#                                actually differ (otherwise it is not a divergence).
+#                                The dc behavior is documented in the comment above
+#                                each call.
+#
+# Skips with exit 0 when dc is not installed, so `make test` stays green on
+# systems without dc.
+
+cd "$(dirname "$0")/.."
+
+if ! command -v dc >/dev/null 2>&1; then
+    echo "dc not installed; skipping dc compliance tests"
+    exit 0
+fi
+
+RPN=./rpn
+failures=0
+tests_run=0
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+
+echo "dc compliance against: $(dc --version 2>&1 | head -1)"
+
+# Run rpn on one stdin line; sets R_OUT / R_ERR / R_CODE
+function run_rpn ()
+{
+    printf '%s\n' "$1" | "$RPN" >"$tmpdir/r.out" 2>"$tmpdir/r.err"
+    R_CODE=$?
+    R_OUT=$(cat "$tmpdir/r.out")
+    R_ERR=$(cat "$tmpdir/r.err")
+}
+
+# Run dc on one stdin line; sets D_OUT (line-wrap normalized) / D_ERR / D_CODE
+function run_dc ()
+{
+    printf '%s\n' "$1" | dc >"$tmpdir/d.out" 2>"$tmpdir/d.err"
+    D_CODE=$?
+    D_OUT=$(sed -z 's/\\\n//g' "$tmpdir/d.out")  # undo dc's backslash-newline wrapping
+    D_ERR=$(cat "$tmpdir/d.err")
+}
+
+# same EXPR [EXPECTED] -- rpn and dc agree on stdout and on errored-or-not
+function same ()
+{
+    local input=$1 want=${2:-}
+    tests_run=$((tests_run + 1))
+    run_rpn "$input"
+    run_dc "$input"
+    local rerr=0 derr=0
+    [ -n "$R_ERR" ] && rerr=1
+    [ -n "$D_ERR" ] && derr=1
+    if [ "$R_OUT" != "$D_OUT" ] || [ "$rerr" -ne "$derr" ]; then
+        failures=$((failures + 1))
+        echo "FAIL same '$input': rpn out='$R_OUT' err='$R_ERR' vs dc out='$D_OUT' err='$D_ERR'"
+        return
+    fi
+    if [ -n "$want" ] && [ "$R_OUT" != "$want" ]; then
+        failures=$((failures + 1))
+        echo "FAIL same '$input': expected '$want', got '$R_OUT'"
+    fi
+}
+
+# diverges EXPR RPN_OUT RPN_ERR_SUBSTR RPN_CODE -- pin a deliberate divergence
+function diverges ()
+{
+    local input=$1 want_out=$2 want_err=$3 want_code=$4
+    tests_run=$((tests_run + 1))
+    run_rpn "$input"
+    if [ "$R_OUT" != "$want_out" ] || [[ "$R_ERR" != *"$want_err"* ]] || [ "$R_CODE" != "$want_code" ]; then
+        failures=$((failures + 1))
+        echo "FAIL diverge '$input': rpn out='$R_OUT' err='$R_ERR' code=$R_CODE (want out='$want_out' err='*$want_err*' code=$want_code)"
+        return
+    fi
+    run_dc "$input"
+    local rerr=0 derr=0
+    [ -n "$R_ERR" ] && rerr=1
+    [ -n "$D_ERR" ] && derr=1
+    # dc must differ in stdout, errored-state, or exit code; else not a divergence
+    if [ "$D_OUT" = "$R_OUT" ] && [ "$rerr" -eq "$derr" ] && [ "$D_CODE" = "$R_CODE" ]; then
+        failures=$((failures + 1))
+        echo "FAIL diverge '$input': dc is identical (out='$D_OUT' err='$D_ERR' code=$D_CODE); not a divergence"
+    fi
+}
+
+# ===== IDENTICAL TO dc: arithmetic, printing, stack, registers, macros =====
+same "2 3 + p"            "5"
+same "2 3 - p"            "-1"
+same "_5 3 + p"           "-2"
+same "2 3 * p"            "6"
+same "10 3 / p"           "3"
+same "10 3 % p"           "1"
+same "10 3 ~ f"           $'1\n3'
+same "2 10 ^ p"           "1024"
+same "0 0 ^ p"            "1"
+same "2 0 ^ p"            "1"
+same "2 v p"              "1"
+same "2 _3 ^ p"           "0"        # negative exponent at scale 0 -> 0
+same "1 _1 ^ p"           "1"        # 1^-1 -> 1
+same "5 0 / f"            $'0\n5'    # divide by zero: operands kept, both error
+same "5 0 % f"            $'0\n5'
+same "5 0 ~ f"            $'0\n5'
+same "1 2 3 f"            $'3\n2\n1'
+same "1 2 r f"            $'1\n2'
+same "1 d f"              $'1\n1'
+same "[hello] p"          "hello"
+same "[[a]b] p"           "[a]b"
+same "5 sa la p"          "5"
+same "5 Sa 6 Sa la la f"  $'6\n6'    # per-register value stack (S pushes, l peeks)
+same "7 La"                              # L on empty register: both error, empty stdout
+same "5 1 :a 1 ;a p"      "5"
+same "9 2 :a 2 ;a p"      "9"
+same "5 1 :a 3 ;a p"      "0"        # missing array cell loads 0
+same "[1 p q 2 p] x 3 p"  "1"        # q unwinds one macro level
+same "q"                              # q at top level exits
+same "1 Q"                              # over-depth Q: both error, empty stdout
+same "2 3 + p # comment"  "5"
+same "65 P"               "A"        # P prints integer part as bytes, MSB first
+
+# ===== IDENTICAL TO dc: decimal numbers and scale =====
+same "1.5 p"              "1.5"
+same ".5 p"               ".5"
+same "1. p"               "1"
+same "_0.5 p"             "-.5"
+same "007.50 p"           "7.50"
+same "0.0 p"              "0"
+same "1..2 f"             $'.2\n1'  # second '.' starts a new token
+same "2_3 f"              $'-3\n2'
+same "2 k 1 3 / p"        ".33"
+same "5 k 10 3 / p"       "3.33333"
+same "2 k 5 3 % p"        ".02"
+same "2 k 5 3 ~ f"        $'.02\n1.66'
+same "3 k 2 v p"          "1.414"
+same "3 k 2.25 v p"       "1.500"
+same "2 k 1.5 2 ^ p"      "2.25"
+same "2 k 2.5 2 ^ p"      "6.25"
+same "2 k 2 _3 ^ p"       ".12"
+same "5 k 2 _2 ^ p"       ".25000"
+same "3 k K p"            "3"
+same "1000000 k K p"      "1000000"
+same "2 300 ^ p"                        # long output: exercises dc line-wrap normalization
+same "1.5 2.25 + p"       "3.75"
+same "1.5 2.5 * p"        "3.7"      # * capped at k=0
+
+# ===== IDENTICAL TO dc: comparison conditionals (scale ignored) =====
+same "[8 p] sa 1 2 >a"    "8"        # 2 > 1 fires
+same "[8 p] sa 2 1 >a"    ""         # 1 > 2 does not fire
+same "[9 p] sa 1.5 1.50 =a" "9"      # comparisons ignore scale
+same "[9 p] sa 1.6 1.5 <a"  "9"      # 1.5 < 1.6 fires
+
+# ===== DELIBERATE DIVERGENCES from dc (each pinned, with dc's behavior noted) =====
+
+# rpn exits 1 when any command failed; dc always exits 0. Session continues in both.
+# dc: "1 0 /" -> stderr "dc: divide by zero", exit 0, empty stdout.
+diverges "1 0 /"  ""  "divide by zero"  1
+
+# Error wording: rpn says "stack underflow", dc says "stack empty".
+# dc: "p" -> stderr "dc: stack empty", exit 0.
+diverges "p"  ""  "stack underflow"  1
+
+# Q uses the integer part: rpn accepts _0.5 as count 0 (no-op); dc 1.5.2 rejects it
+# ("Q command requires a number >= 0"). Both print 3, but only rpn is error-free.
+# dc: "1 k _0.5 Q 3 p" -> stdout "3", stderr nonempty, exit 0.
+diverges "1 k _0.5 Q 3 p"  "3"  ""  0
+
+# Array index uses the integer part of a nonnegative value: rpn truncates 0.5 to
+# cell 0 and loads 5; dc rejects any fractional index ("array index must be a
+# nonnegative integer") and loads 0.
+# dc: "1 k 5 0.5 :a 0 ;a p" -> stdout "0", stderr nonempty, exit 0.
+diverges "1 k 5 0.5 :a 0 ;a p"  "5"  ""  0
+
+# Scale factor is capped at MAX_SCALE (1,000,000): rpn errors "scale too large";
+# dc accepts any scale.
+# dc: "1000001 k" -> no error, exit 0, empty stdout.
+diverges "1000001 k"  ""  "scale too large"  1
+
+# A conditional without a following register name is an error in rpn; dc silently
+# ignores it.
+# dc: "1 2 =" -> no error, exit 0, empty stdout.
+diverges "1 2 ="  ""  "expected a single-character register name"  1
+
+# ===== SUMMARY =====
+
+if [ "$failures" -eq 0 ]; then
+    echo "All $tests_run dc compliance tests passed"
+    exit 0
+else
+    echo "$failures of $tests_run dc compliance tests failed"
+    exit 1
+fi

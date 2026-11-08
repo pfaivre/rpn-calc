@@ -102,8 +102,20 @@ static Value *stack_slot(Stack s) {
  * @return the same stack, with the new value on top
  */
 Stack stack_push_num(Stack s, const mpz_t val) {
+    return stack_push_num_scale(s, val, 0);
+}
+
+/**
+ * Append a number with a scale at the top of a stack (value = val / 10^scale)
+ * @param s Stack to be completed
+ * @param val digits of the value to add
+ * @param scale number of fractional digits
+ * @return the same stack, with the new value on top
+ */
+Stack stack_push_num_scale(Stack s, const mpz_t val, long scale) {
     Value *slot = stack_slot(s);
     slot->kind = VAL_NUM;
+    slot->scale = scale;
     mpz_init_set(slot->num, val);
     s->size++;
     return s;
@@ -126,6 +138,7 @@ Stack stack_push_str(Stack s, const char *str) {
         rpn_fatal("memory allocation error");
     memcpy(slot->str, str, size);  // copies the terminating NUL as well
     slot->kind = VAL_STR;
+    slot->scale = 0;
     s->size++;
     return s;
 }
@@ -142,7 +155,7 @@ Stack stack_push_str(Stack s, const char *str) {
  */
 Stack stack_push_value(Stack s, Value v) {
     if (v.kind == VAL_NUM)
-        return stack_push_num(s, v.num);
+        return stack_push_num_scale(s, v.num, v.scale);
     return stack_push_str(s, v.str);
 }
 

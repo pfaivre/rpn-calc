@@ -33,18 +33,18 @@ SOFTWARE.
 
 #include "calc.h"
 #include "io.h"
+#include "number.h"
 #include "stack.h"
-
-/* Maximum size of a ^ result, in bits (32 MiB). Beyond this, mpz_pow_ui
- * risks exhausting memory and GMP aborts on allocation failure, so the
- * exponent is rejected up front with a graceful error instead. */
-#define MAX_POW_BITS ((size_t) 1 << 28)
 
 /* Maximum nesting depth of macro execution (x). A deeper nesting is
  * rejected with an error instead of overflowing the C stack. */
 #define MAX_MACRO_DEPTH 1000
 
 static bool _calc_errorFlag = false;
+
+/* The scale factor set by k: number of fractional digits produced by /, %,
+ * ~, ^ with a negative exponent and v */
+static long _calc_scale = 0;
 
 /* Levels of macro execution still to unwind, set by q/Q: when a frame of
  * _calc_parse_depth sees it positive, it abandons the rest of its input */
@@ -94,8 +94,6 @@ bool calc_quit_requested() {
     return _calc_quit > 0 || _calc_exitAll;
 }
 
-typedef void (*MpzBinop)(mpz_t, const mpz_t, const mpz_t);
-
 /**
  * Whether the top two values of the stack are both numbers
  * @param s Stack to inspect
@@ -105,37 +103,16 @@ static bool _calc_top_two_numeric(Stack s) {
     return stack_top(s)->kind == VAL_NUM && stack_second(s)->kind == VAL_NUM;
 }
 
-/**
- * Apply a binary mpz operation to the top two values of the stack
- * @param s Stack to modify
- * @param op The mpz operation to apply (e.g. mpz_add)
- * @return The top of the stack after the operation
- */
-static Stack _calc_binary_op(Stack s, MpzBinop op) {
-    if (!stack_hasAtLeast(s, 2)) {
-        _calc_error("stack underflow");
-        return s;
-    }
-    if (!_calc_top_two_numeric(s)) {
-        _calc_error("non-numeric value");
-        return s;
-    }
-    Value a;
-    s = stack_pop(s, &a);
-    op(stack_top(s)->num, stack_top(s)->num, a.num);
-    value_clear(&a);
-    return s;
-}
+typedef const char *(*NumberBinop)(const Value *, const Value *, long, Value *);
 
 /**
- * Apply a division-like mpz operation, rejecting a zero divisor before
- * popping so the operands stay on the stack on error
+ * Apply a scale-aware binary operation to the top two values of the stack;
+ * on error the operands stay on the stack
  * @param s Stack to modify
- * @param op The mpz operation to apply (e.g. mpz_tdiv_q)
- * @param err Error message used when the divisor is zero
- * @return The top of the stack after the operation
+ * @param op The operation (e.g. number_add)
+ * @return The stack after the operation
  */
-static Stack _calc_div_op(Stack s, MpzBinop op, const char *err) {
+static Stack _calc_num_binop(Stack s, NumberBinop op) {
     if (!stack_hasAtLeast(s, 2)) {
         _calc_error("stack underflow");
         return s;
@@ -144,19 +121,24 @@ static Stack _calc_div_op(Stack s, MpzBinop op, const char *err) {
         _calc_error("non-numeric value");
         return s;
     }
-    if (mpz_cmp_si(stack_top(s)->num, 0) == 0) {
+    Value out;
+    const char *err = op(stack_second(s), stack_top(s), _calc_scale, &out);
+    if (err) {
         _calc_error(err);
         return s;
     }
-    Value a;
+    Value a, b;
+    s = stack_pop(s, &b);
     s = stack_pop(s, &a);
-    op(stack_top(s)->num, stack_top(s)->num, a.num);
     value_clear(&a);
+    value_clear(&b);
+    s = stack_push_value(s, out);
+    value_clear(&out);
     return s;
 }
 
 /**
- * Print a value in decimal: a string as-is, a number in base 10
+ * Print a value in decimal: a string as-is, a number with its scale
  * @param v Value to print
  * @param newline Whether to append a trailing newline
  */
@@ -166,44 +148,39 @@ static void _calc_print(const Value *v, bool newline) {
         if (newline)
             putchar('\n');
     } else {
-        mpz_out_str(stdout, 10, v->num);
-        if (newline)
-            puts("");
+        number_print(v, newline);
     }
-}
-
-/**
- * Print a number as a string of bytes, most significant byte of its
- * absolute value first; zero prints as a single NUL byte
- * @param num Number to print
- */
-static void _calc_print_bytes(const mpz_t num) {
-    mpz_t abs;
-    mpz_init(abs);
-    mpz_abs(abs, num);
-    size_t nbytes = mpz_sizeinbase(abs, 256);  // at least 1, even for zero
-    unsigned char *bytes = malloc(nbytes);
-    if (!bytes)
-        rpn_fatal("memory allocation error");
-    size_t count = 0;
-    mpz_export(bytes, &count, 1, 1, 1, 0, abs);
-    if (count == 0)
-        putchar(0);  // zero prints as a single NUL byte
-    else
-        fwrite(bytes, 1, count, stdout);
-    free(bytes);
-    mpz_clear(abs);
 }
 
 static Stack _calc_parse_depth(Stack s, Registers regs, char *string, int depth);
 
 /**
- * Whether a value is usable as an array index: a nonnegative integer
- * @param v Value to inspect
- * @return true when v is a number greater than or equal to 0
+ * Set idx to the integer part of a number value. idx must already be
+ * initialized by the caller (which also clears it on every path)
+ * @param v Value to convert
+ * @param idx Output mpz, already initialized
+ * @return true when v is a number; false otherwise
  */
-static bool _calc_is_index(const Value *v) {
-    return v->kind == VAL_NUM && mpz_sgn(v->num) >= 0;
+static bool _calc_int_part_into(const Value *v, mpz_t idx) {
+    if (v->kind != VAL_NUM)
+        return false;
+    number_int_part(v, idx);
+    return true;
+}
+
+/**
+ * Whether a value is usable as an array index — a nonnegative number (its
+ * integer part is the index, so 1.5 indexes cell 1, but _0.5 is rejected
+ * because its value is negative) — and set idx to that integer part.
+ * idx must already be initialized by the caller
+ * @param v Value to inspect
+ * @param idx Output mpz, already initialized, set on success
+ * @return true when v is a nonnegative number; false otherwise
+ */
+static bool _calc_index_mpz(const Value *v, mpz_t idx) {
+    if (!_calc_int_part_into(v, idx))
+        return false;
+    return mpz_sgn(v->num) >= 0;
 }
 
 /**
@@ -278,14 +255,18 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
                 _calc_error("stack underflow");
                 return s;
             }
-            if (!_calc_is_index(stack_top(s))) {
+            mpz_t idx;
+            mpz_init(idx);
+            if (!_calc_index_mpz(stack_top(s), idx)) {
                 _calc_error("array index must be a nonnegative integer");
+                mpz_clear(idx);
                 return s;
             }
             Value index, val;
             s = stack_pop(s, &index);  // Pop the index (top of stack)
             s = stack_pop(s, &val);    // Pop the value
-            register_array_store(regs, name, index.num, val);  // moves val
+            register_array_store(regs, name, idx, val);  // moves val
+            mpz_clear(idx);
             value_clear(&index);
             return s;
         }
@@ -296,13 +277,17 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
                 _calc_error("stack underflow");
                 return s;
             }
-            if (!_calc_is_index(stack_top(s))) {
+            mpz_t idx;
+            mpz_init(idx);
+            if (!_calc_index_mpz(stack_top(s), idx)) {
                 _calc_error("array index must be a nonnegative integer");
+                mpz_clear(idx);
                 return s;
             }
             Value index;
             s = stack_pop(s, &index);
-            const Value *cell = register_array_find(regs, name, index.num);
+            const Value *cell = register_array_find(regs, name, idx);
+            mpz_clear(idx);
             if (cell)
                 s = stack_push_value(s, *cell);
             else
@@ -362,7 +347,7 @@ static Stack _calc_conditional(Stack s, Registers regs, const char *op, unsigned
         return s;
     }
     // compare the original top-of-stack against the second value
-    int cmp = mpz_cmp(stack_top(s)->num, stack_second(s)->num);
+    int cmp = number_cmp(stack_top(s), stack_second(s));
     Value a, b;
     s = stack_pop(s, &a);
     s = stack_pop(s, &b);
@@ -403,37 +388,32 @@ static Stack _calc_conditional(Stack s, Registers regs, const char *op, unsigned
  * @return The top of the stack after performing the command
  */
 static Stack _calc_proceed(Stack s, Registers regs, const char* command, int depth) {
-    // A number
-    if (isdigit((unsigned char) command[0]) || command[0] == '_') {
-        mpz_t number;
-
-        // Negative number
-        if (command[0] == '_') {
-            mpz_init_set_str(number, command + 1, 10);
-            mpz_neg(number, number);
+    // A number (integer or decimal: 12, _3, 1.5, .5, 1.)
+    if (isdigit((unsigned char) command[0]) || command[0] == '_' || command[0] == '.') {
+        Value v;
+        if (!number_parse(command, &v)) {
+            _calc_error("scale too large");
+            return s;
         }
-        // Positive number
-        else
-            mpz_init_set_str(number, command, 10);
-
-        s = stack_push_num(s, number);
-        mpz_clear(number);
+        s = stack_push_value(s, v);
+        value_clear(&v);
         return s;
     }
 
     // Arithmetic operators
     if (strcmp(command, "+") == 0)
-        return _calc_binary_op(s, mpz_add);
+        return _calc_num_binop(s, number_add);
     if (strcmp(command, "-") == 0)
-        return _calc_binary_op(s, mpz_sub);
+        return _calc_num_binop(s, number_sub);
     if (strcmp(command, "*") == 0)
-        return _calc_binary_op(s, mpz_mul);
+        return _calc_num_binop(s, number_mul);
     if (strcmp(command, "/") == 0)
-        return _calc_div_op(s, mpz_tdiv_q, "divide by zero");
+        return _calc_num_binop(s, number_div);
     if (strcmp(command, "%") == 0)
-        return _calc_div_op(s, mpz_tdiv_r, "remainder by zero");
+        return _calc_num_binop(s, number_mod);
 
-    // Division with remainder (dc-style ~ operator)
+    // Division with remainder (~): quotient at scale k pushed first, then
+    // the remainder (scale max(sa, sb+k)) on top
     if (strcmp(command, "~") == 0) {
         if (!stack_hasAtLeast(s, 2)) {
             _calc_error("stack underflow");
@@ -443,78 +423,27 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
             _calc_error("non-numeric value");
             return s;
         }
-        if (mpz_cmp_si(stack_top(s)->num, 0) == 0) {
-            _calc_error("divide by zero");
+        Value q, r;
+        const char *err = number_divmod(stack_second(s), stack_top(s), _calc_scale, &q, &r);
+        if (err) {
+            _calc_error(err);
             return s;
         }
         Value a, b;
-        mpz_t quotient, remainder;
-        s = stack_pop(s, &a);  // Pop divisor (top of stack)
-        s = stack_pop(s, &b);  // Pop dividend (next on stack)
-
-        mpz_init(quotient);
-        mpz_init(remainder);
-        mpz_tdiv_qr(quotient, remainder, b.num, a.num);
-
-        // Push results: quotient first, then remainder
-        s = stack_push_num(s, quotient);
-        s = stack_push_num(s, remainder);
-
+        s = stack_pop(s, &b);  // Pop divisor (top of stack)
+        s = stack_pop(s, &a);  // Pop dividend (next on stack)
         value_clear(&a);
         value_clear(&b);
-        mpz_clear(quotient);
-        mpz_clear(remainder);
+        s = stack_push_value(s, q);
+        s = stack_push_value(s, r);
+        value_clear(&q);
+        value_clear(&r);
         return s;
     }
 
     // Exponentiation
-    if (strcmp(command, "^") == 0) {
-        if (!stack_hasAtLeast(s, 2)) {
-            _calc_error("stack underflow");
-            return s;
-        }
-        if (!_calc_top_two_numeric(s)) {
-            _calc_error("non-numeric value");
-            return s;
-        }
-        // A positive exponent that does not fit in an unsigned long cannot
-        // be computed; reject it before popping so the operands stay on the
-        // stack (dc reports "exponent too large in raise")
-        if (mpz_sgn(stack_top(s)->num) > 0 && !mpz_fits_ulong_p(stack_top(s)->num)) {
-            _calc_error("exponent too large in raise");
-            return s;
-        }
-        // Cap the result size: base^exp has about exp * bits(base) bits, and
-        // beyond MAX_POW_BITS GMP would attempt a huge allocation and abort
-        // on failure. Bases 0 and +-1 are exact for any exponent and stay
-        // instant. Checked before popping so the operands stay on the stack.
-        if (mpz_sgn(stack_top(s)->num) > 0 && mpz_cmpabs_ui(stack_second(s)->num, 1) > 0) {
-            size_t result_bits;
-            if (ckd_mul(&result_bits, (size_t) mpz_get_ui(stack_top(s)->num),
-                        mpz_sizeinbase(stack_second(s)->num, 2))
-                || result_bits > MAX_POW_BITS) {
-                _calc_error("exponent too large in raise");
-                return s;
-            }
-        }
-        Value a;
-        s = stack_pop(s, &a);
-        if (mpz_sgn(a.num) < 0) {
-            // Negative exponent
-            // at the default scale 0 that is the truncation toward zero of
-            // the rational result, i.e. 0 unless the base is 1 or _1
-            if (mpz_cmp_si(stack_top(s)->num, 1) == 0)
-                mpz_set_ui(stack_top(s)->num, 1);
-            else if (mpz_cmp_si(stack_top(s)->num, -1) == 0)
-                mpz_set_si(stack_top(s)->num, mpz_odd_p(a.num) ? -1 : 1);
-            else
-                mpz_set_ui(stack_top(s)->num, 0);
-        } else {
-            mpz_pow_ui(stack_top(s)->num, stack_top(s)->num, mpz_get_ui(a.num));
-        }
-        value_clear(&a);
-        return s;
-    }
+    if (strcmp(command, "^") == 0)
+        return _calc_num_binop(s, number_pow);
 
     // Square root
     if (strcmp(command, "v") == 0) {
@@ -526,11 +455,46 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
             _calc_error("non-numeric value");
             return s;
         }
-        if (mpz_sgn(stack_top(s)->num) < 0) {
-            _calc_error("square root of negative number");
+        Value out;
+        const char *err = number_sqrt(stack_top(s), _calc_scale, &out);
+        if (err) {
+            _calc_error(err);
             return s;
         }
-        mpz_root(stack_top(s)->num, stack_top(s)->num, 2);
+        Value a;
+        s = stack_pop(s, &a);
+        value_clear(&a);
+        s = stack_push_value(s, out);
+        value_clear(&out);
+        return s;
+    }
+
+    // k: pop the scale factor (the integer part of the top value); it must
+    // be a nonnegative number not exceeding MAX_SCALE
+    if (strcmp(command, "k") == 0) {
+        if (!stack_hasAtLeast(s, 1)) {
+            _calc_error("stack underflow");
+            return s;
+        }
+        long ns;
+        const char *err = number_scale_of(stack_top(s), &ns);
+        if (err) {
+            _calc_error(err);
+            return s;
+        }
+        _calc_scale = ns;
+        Value a;
+        s = stack_pop(s, &a);
+        value_clear(&a);
+        return s;
+    }
+
+    // K: push the current scale factor
+    if (strcmp(command, "K") == 0) {
+        mpz_t ks;
+        mpz_init_set_si(ks, _calc_scale);
+        s = stack_push_num(s, ks);
+        mpz_clear(ks);
         return s;
     }
 
@@ -574,7 +538,7 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
         if (a.kind == VAL_STR)
             fputs(a.str, stdout);
         else
-            _calc_print_bytes(a.num);
+            number_print_bytes(&a);
         value_clear(&a);
         return s;
     }
@@ -629,21 +593,25 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
     }
 
     // Q: pop a count N and quit N levels of macro execution; it never exits
-    // the program. As in dc, an over-depth count is an error (popped) but
-    // still quits the available levels, min(N, depth)
+    // the program. An over-depth count is an error (popped) but still quits
+    // the available levels, min(N, depth). The count is the integer part of
+    // the top value, which must be >= 0.
     if (strcmp(command, "Q") == 0) {
         if (!stack_hasAtLeast(s, 1)) {
             _calc_error("stack underflow");
             return s;
         }
-        if (stack_top(s)->kind != VAL_NUM || mpz_sgn(stack_top(s)->num) < 0
-            || !mpz_fits_slong_p(stack_top(s)->num)) {
+        mpz_t ip;
+        mpz_init(ip);
+        if (!_calc_int_part_into(stack_top(s), ip) || mpz_sgn(ip) < 0 || !mpz_fits_slong_p(ip)) {
             _calc_error("Q command requires a number >= 0");
+            mpz_clear(ip);
             return s;
         }
         Value n;
         s = stack_pop(s, &n);
-        long count = mpz_get_si(n.num);
+        long count = mpz_get_si(ip);
+        mpz_clear(ip);
         if (count > depth)
             _calc_error("Q command argument exceeded string execution depth");
         _calc_quit = (int) (count < depth ? count : depth);
@@ -656,19 +624,35 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
 }
 
 /**
- * Detects if the two chars belong to different commands
+ * Whether c continues the current token
+ * @param token Token built so far
+ * @param len Length of token
+ * @param c The next character
+ * @return true when c belongs to the token being built
  */
-static bool _calc_tokenThreshold(char c1, char c2) {
-    // digit or minus sign (_) followed by an other digit
-    if ((c1 == '_' || (c1 >= '0' && c1 <= '9'))
-        && (c2 >= '0' && c2 <= '9'))
-        return false;
+static bool _calc_token_continues(const char *token, size_t len, char c) {
+    // A digit continues a number (possibly negative: _ prefix, or after a .)
+    if (c >= '0' && c <= '9')
+        return len > 0 && (token[len-1] == '_' || token[len-1] == '.'
+                           || (token[len-1] >= '0' && token[len-1] <= '9'));
 
-    // the two-character conditionals !>, !< and !=
-    if (c1 == '!' && (c2 == '>' || c2 == '<' || c2 == '='))
-        return false;
+    // A '.' continues a number token that does not contain one yet: 1.5, .5
+    // and 1. are single tokens, and a second '.' starts a new token
+    // (1..2 is read as 1. then .2)
+    if (c == '.') {
+        if (strchr(token, '.') != NULL)
+            return false;
+        for (size_t i = 0; i < len; i++)
+            if (token[i] != '_' && (token[i] < '0' || token[i] > '9'))
+                return false;
+        return true;
+    }
 
-    return true;
+    // The two-character conditionals !>, !< and !=
+    if ((c == '>' || c == '<' || c == '=') && len == 1 && token[0] == '!')
+        return true;
+
+    return false;
 }
 
 /**
@@ -735,12 +719,11 @@ static char *_calc_firstToken(char *token, char *str, bool *is_string) {
 
     // Copy token chars until the next one or end of string
     while (*str != ' ' && *str != '\t' && *str != '\n' && *str != '\0') {
+        // Stop when the next char does not belong to the current token
+        if (i > 0 && !_calc_token_continues(token, i, *str))
+            break;
         token[i++] = *str++;
         token[i] = '\0';
-
-        // If the next char does not belong to the current token, stop copying
-        if (_calc_tokenThreshold(token[i-1], *str))
-            break;
     }
 
     return str;

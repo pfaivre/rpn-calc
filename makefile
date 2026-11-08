@@ -1,5 +1,5 @@
 CC		= gcc
-OBJS	= main.o calc.o stack.o io.o registers.o
+OBJS	= main.o calc.o stack.o io.o registers.o number.o
 STD		= c23
 CFLAGS	= -c -g -Wall -pedantic -std=$(STD) -MMD -MP -D_FORTIFY_SOURCE=3 -O2
 LDFLAGS	= -lgmp
@@ -30,3 +30,4 @@ valgrind: $(PGM)
 test: $(PGM)
 		bash ./tests/functional_tests.sh
 		bash ./tests/adversarial_tests.sh
+		bash ./tests/dc_compliance_tests.sh

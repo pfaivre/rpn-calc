@@ -36,15 +36,17 @@ typedef enum ValueKind {
 } ValueKind;
 
 /**
- * A stack value: either an arbitrary-precision integer or a string.
+ * A stack value: either an arbitrary-precision number or a string.
  * Only the member matching kind is valid.
  */
 typedef struct Value {
     ValueKind kind;
     union {
-        mpz_t num;   /**< integer, when kind == VAL_NUM */
+        mpz_t num;   /**< digits of the number, when kind == VAL_NUM */
         char *str;   /**< heap-allocated NUL-terminated string, when kind == VAL_STR */
     };
+    long scale;      /**< fractional digits of a number (value = num / 10^scale);
+                          valid when kind == VAL_NUM */
 } Value;
 
 /**
@@ -71,6 +73,9 @@ Stack stack_init();
 void value_clear(Value *v);
 
 [[nodiscard]] Stack stack_push_num(Stack, const mpz_t);
+
+/** Push a number with a scale (value = num / 10^scale) */
+[[nodiscard]] Stack stack_push_num_scale(Stack, const mpz_t, long scale);
 
 [[nodiscard]] Stack stack_push_str(Stack, const char *);
 
