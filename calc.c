@@ -427,7 +427,7 @@ static bool _calc_tokenThreshold(char c1, char c2) {
  * or on an unterminated string literal
  */
 static char *_calc_firstToken(char *token, char *str, bool *is_string) {
-    int i = 0;
+    size_t i = 0;
 
     *is_string = false;
 
