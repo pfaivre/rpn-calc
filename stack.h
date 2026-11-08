@@ -41,8 +41,10 @@ typedef enum ValueKind {
  */
 typedef struct Value {
     ValueKind kind;
-    mpz_t num;   /**< integer, when kind == VAL_NUM */
-    char *str;   /**< heap-allocated NUL-terminated string, when kind == VAL_STR */
+    union {
+        mpz_t num;   /**< integer, when kind == VAL_NUM */
+        char *str;   /**< heap-allocated NUL-terminated string, when kind == VAL_STR */
+    };
 } Value;
 
 /**
