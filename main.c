@@ -40,7 +40,6 @@ SOFTWARE.
  * Things to be done next:
  * TODO: Read a script file
  * TODO: Support arbitrary input/output radices
- * TODO: Support arbitrary precision for decimal
  */
 
 

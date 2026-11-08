@@ -754,6 +754,110 @@ test_e "5" -e "5 p"
 test_e "1" -e "[1 p 2 Q 2 p] x 3 p"       # 2 Q at depth 2: valid, unwinds both frames
 test_e_error "exceeded string execution depth" -e "5 Q 3 p"  # over-depth at depth 1: error, unwinds the -e frame
 
+# ===== DECIMAL NUMBERS AND SCALE (k, K) =====
+# A number is num / 10^scale. Parsing: 1.5, .5, 1., _.5; a second '.' starts
+# a new token (1..2 is 1. then .2). Printing keeps the scale (1.50) but drops
+# a leading zero (.5), and zero always prints as "0".
+
+test "1.5 p"  "1.5"
+test ".5 p"  ".5"
+test "1. p"  "1"
+test "_0.5 p"  "-.5"
+test "007.50 p"  "7.50"
+test "0.50 p"  ".50"
+test "0.0 p"  "0"
+test "0.00 p"  "0"
+test "_0.0 p"  "0"
+test "0.10 p"  ".10"
+test "1..2 f"  $'.2\n1'
+test "1.2.3 f"  $'.3\n1.2'
+test ". p"  "0"
+test ".. f"  $'0\n0'
+test "_. p"  "0"
+
+# k sets the scale factor (integer part of the top value), K pushes it
+test "K p"  "0"
+test "2 k K p"  "2"
+test "2.5 k K p"  "2"          # k truncates its operand
+test_error "_1 k"  "scale must be a nonnegative number"
+test_error_stack "_1 k f"  "-1"  "scale must be a nonnegative number"
+test_error "[a] k"  "scale must be a nonnegative number"
+test_error "1000001 k"  "scale too large"   # MAX_SCALE cap
+test "1000000 k K p"  "1000000"
+
+# / produces exactly k fractional digits, truncating toward zero
+test "0 k 1 3 / p"  "0"
+test "2 k 1 3 / p"  ".33"
+test "5 k 1 2 / p"  ".50000"
+test "2 k _1 3 / p"  "-.33"
+test "2 k 1 _3 / p"  "-.33"
+test "2 k 10 3 / p"  "3.33"
+test "2 k 1.50 3 / p"  ".50"
+test_error "2 k 1 0 /"  "divide by zero"
+
+# % and ~: quotient at scale k, remainder at scale max(sa, sb+k)
+test "0 k 5 3 % p"  "2"
+test "2 k 5 3 % p"  ".02"
+test "0 k 5.0 3 % p"  "2.0"
+test "1 k 5 3.00 % p"  ".200"
+test "3 k 5.0 3 % p"  ".002"
+test "2 k 5 3.0 ~ f"  $'.020\n1.66'
+test "2 k 5 3 ~ f"  $'.02\n1.66'
+test_error "2 k 5 0 %"  "remainder by zero"
+test_error_stack "2 k 10 0 ~ f"  $'0\n10'  "divide by zero"
+
+# + and -: result scale max(sa, sb); *: min(sa+sb, max(sa, sb, k))
+test "1.5 2.25 + p"  "3.75"
+test "1.5 2 + p"  "3.5"
+test "1.5 2 - p"  "-.5"
+test "5 k 1.5 2 + p"  "3.5"
+test "1.5 2.5 * p"  "3.7"      # capped at k=0
+test "2 k 0.1 0.1 * p"  ".01"
+test "5 k 1.5 2.5 * p"  "3.75"
+test "1.5 2 * p"  "3.0"
+
+# ^: integer exponent; result scale min(sa*n, max(sa, k)), or k for a
+# negative exponent. The exponent is truncated to its integer part.
+test "2 k 2 2 ^ p"  "4"
+test "3 k 1.5 2 ^ p"  "2.25"
+test "0 k 1.5 3 ^ p"  "3.3"
+test "2 k 2.5 2 ^ p"  "6.25"
+test "2 k 0.5 2 ^ p"  ".25"
+test "0 k 2.5 0 ^ p"  "1"
+test "3 k 1.0 5 ^ p"  "1.000"
+test "3 k _1.0 3 ^ p"  "-1.000"
+test "5 k 2 _2 ^ p"  ".25000"
+test "3 k 2 _1 ^ p"  ".500"
+test "2 k 1.5 _1 ^ p"  ".66"
+test "1 k _1.5 _1 ^ p"  "-.6"
+test "0 k 0.0 5 ^ p"  "0"
+test_error_stack "2 99999999999999999999 ^ f"  $'99999999999999999999\n2'  "exponent too large in raise"
+
+# v: square root at scale max(sa, k)
+test "0 k 2 v p"  "1"
+test "3 k 2 v p"  "1.414"
+test "0 k 2.000 v p"  "1.414"
+test "5 k 2.000 v p"  "1.41421"
+test "3 k 2.25 v p"  "1.500"
+test "1 k 10. v p"  "3.1"
+test_error "_4 v"  "square root of negative number"
+
+# Comparisons ignore scale; P prints the integer part's bytes; registers,
+# arrays and Q use the integer part
+test "[8 p] sa 1.5 1.50 =a"  "8"
+test "[8 p] sa 1.5 1.6 <a"  ""
+test "1.5 sa la p"  "1.5"
+test "5 1.5 :a 1 ;a p"  "5"
+test "5 1.5 :a 1.9 ;a p"  "5"
+test_bytes '1.5 P\n'  "01"
+test_bytes '0.5 P\n'  "00"
+test_error "1.5 0.5 :a"  ""  # 0.5 truncates to index 0: valid
+test "1.5 0.5 :a 0 ;a p"  "1.5"
+test_error_stack "5 _0.5 :a f"  $'-.5\n5'  "array index must be a nonnegative integer"
+
+# Scale persists across lines
+test_lines $'2\n.33'  '2 k K p\n1 3 / p\n'
+
 # ===== SUMMARY =====
 
 if [ "$failures" -eq 0 ]; then

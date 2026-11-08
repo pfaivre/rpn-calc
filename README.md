@@ -43,7 +43,9 @@ options are concatenated.
 Without `-e`, expressions are read from the standard input, one per line; the
 stack persists across lines. Spaces, tabs and newlines separate tokens, and
 spaces may be omitted between tokens (`2 3*4+p`). Negative numbers are written
-with an underscore prefix (`_5`). A `#` starts a comment that runs to the end
+with an underscore prefix (`_5`). Numbers may have a decimal point (`1.5`,
+`.5`, `1.`); a second `.` starts a new token, so `1..2` is read as `1.` then
+`.2`. A `#` starts a comment that runs to the end
 of the line. A NUL byte ends the line for the parser: everything after the
 first NUL byte is ignored.
 
@@ -77,15 +79,21 @@ $ ./rpn
 
 `*` Pops two values off the stack, multiplies them and pushes the result on the stack.
 
-`/` Pops two values off the stack, divides the second popped by the first popped and pushes the quotient on the stack.
+`/` Pops two values off the stack, divides the second popped by the first popped and pushes the quotient on the stack, truncated toward zero with exactly `k` fractional digits.
 
-`%` Pops two values off the stack, divides the second popped by the first popped and pushes the remainder on the stack.
+`%` Pops two values off the stack and pushes `a - b*trunc(a/b)` (the remainder at scale `k`), with scale `max(scale(a), scale(b)+k)`.
 
-`~` Pops two values off the stack, divides the second one popped by the first one popped. The quotient is pushed first, and the remainder is pushed next.
+`~` Pops two values off the stack, divides the second one popped by the first one popped. The quotient (scale `k`) is pushed first, and the remainder (scale `max(scale(a), scale(b)+k)`) is pushed next.
 
-`^` Pops two values off the stack, use the first as the exponent and the second as the base and pushes the result on the stack. A negative exponent gives the integer part of the exact result, as dc does at scale 0: 0 unless the base is 1 or _1 (which give 1 or _1 according to the exponent's parity). A positive exponent whose result would exceed 32 MiB is rejected with an error and the operands stay on the stack.
+`^` Pops two values off the stack, uses the first (truncated to its integer part) as the exponent and the second as the base and pushes the result on the stack. The result scale is `min(scale(base)*n, max(scale(base), k))` for a positive exponent `n`, and `k` for a negative one. A positive exponent whose result would exceed 32 MiB is rejected with an error and the operands stay on the stack.
 
-`v` Pops one value, computes its square root, and pushes the result to the stack.
+`v` Pops one value, computes its square root truncated down at scale `max(scale(a), k)`, and pushes the result to the stack.
+
+`k` Pops the top value and sets the scale factor to its integer part; it must be a nonnegative number not exceeding 1,000,000, otherwise it is an error and the value stays on the stack.
+
+`K` Pushes the current scale factor.
+
+`+` and `-` push the result at scale `max` of the two operand scales; `*` pushes `a*b` at scale `min(scale(a)+scale(b), max(scale(a), scale(b), k))`.
 
 `d` Duplicates the top value of the stack.
 
@@ -130,20 +138,29 @@ For the commands listed above, rpn behaves like dc (checked against GNU dc 1.5.2
 
 - The RPN stack model: values are pushed on a stack, operators pop their
   operands, and the stack persists across input lines.
-- Number syntax: decimal integers, `_` prefix for negative numbers, leading
-  zeros, tokens may be written without separating spaces (`2 3*4+p`, and
-  `2_3` is read as 2 then _3), and `#` starts a comment running to the end
-  of the line.
-- Operator semantics: `/`, `%` and `~` truncate toward zero and the remainder
-  takes the sign of the dividend (`~` pushes the quotient first, then the
-  remainder); `^` with a non-negative exponent, including `0 0 ^` = 1, and a
-  negative exponent giving the integer part of the exact result, as dc does
-  at scale 0; `v` rounds down; division by zero leaves the operands on the
-  stack and the session continues; `r` with fewer than two values does
-  nothing; `p` prints the top value without popping it and `f` prints the
-  whole stack, top first; `n` pops and prints without a trailing newline and
-  `P` pops and prints the number as bytes, most significant byte first.
-- Arbitrary-precision integer arithmetic: results are exact, as in dc.
+- Number syntax: decimal numbers (`1.5`, `.5`, `1.`), `_` prefix for negative
+  numbers, leading zeros, tokens may be written without separating spaces
+  (`2 3*4+p`, and `2_3` is read as 2 then _3), and `#` starts a comment
+  running to the end of the line.
+- Operator semantics: `/`, `%` and `~` truncate toward zero (`~` pushes the
+  quotient first, then the remainder); `^` with a non-negative exponent,
+  including `0 0 ^` = 1, and a negative exponent giving the truncation of the
+  exact result at scale `k`; `v` rounds down; division by zero leaves the
+  operands on the stack and the session continues; `r` with fewer than two
+  values does nothing; `p` prints the top value without popping it and `f`
+  prints the whole stack, top first; `n` pops and prints without a trailing
+  newline and `P` pops and prints the integer part of the number as bytes,
+  most significant byte first.
+- Scale: a number is `num / 10^scale`; printing keeps the scale (`1.50`) but
+  drops a leading zero (`.5`), and zero prints as `0`. `k` sets the scale
+  factor (integer part of the popped value), `K` pushes it. Result scales:
+  `+`/`-` use `max(sa, sb)`, `*` uses `min(sa+sb, max(sa, sb, k))`, `/` uses
+  `k`, `%` and the `~` remainder use `max(sa, sb+k)`, `^` uses
+  `min(sa*n, max(sa, k))` (or `k` for a negative exponent), `v` uses
+  `max(sa, k)`. Comparisons ignore scale. `P`, `k`, `Q` and array indices use
+  the integer part of a number.
+- Arbitrary-precision decimal arithmetic: results are exact within the
+  scale rules, as in dc.
 - String literals `[...]` (with nested brackets), and printing them with `p`, `n`, `P` and `f`: `p` adds a trailing newline, `n` and `P` pop the value and print without one, `f` prints one value per line, top first. Arithmetic on a string reports `non-numeric value` and leaves the operands on the stack, as in dc.
 - Macro execution with `x`: a string is popped and run as commands on the same stack, macros nest, and `x` on a number leaves the stack untouched.
 - Registers: `s`/`l`/`S`/`L` on a per-register value stack (with `s` replacing the content, `l` peeking, `L` erroring on an empty register stack, and `l` on an empty register loading 0), and `:`/`;` arrays per register (index on top, missing index loads 0, negative or non-numeric index rejected with the operands kept, values may be strings, a register's stack and array are independent).
@@ -157,8 +174,11 @@ rpn deliberately differs from dc in the following ways:
   reads `stack underflow` where dc says `stack empty`.
 - The exit status is 1 if any command failed, where dc always exits 0. The
   session still continues after an error in both programs.
-- Integers only: no decimal point, no scale (`k`) and no input/output base
-  (`i`, `o`) — input and output are always base 10.
+- No input/output base (`i`, `o`) — input and output are always base 10.
+- The scale factor is capped at 1,000,000 (`scale too large`), where dc would
+  try to compute with any scale. An exponent with a fractional part is
+  truncated to its integer part, where dc 1.5.2 rejects fractional exponents
+  with `exponent too large in raise`.
 - An unknown command such as `!` is reported as
   unimplemented, where dc would run it as a shell escape. A `[...]` literal
   not closed on the same line is an error, where dc keeps reading the
@@ -178,7 +198,6 @@ rpn deliberately differs from dc in the following ways:
 
 ## Limitations
 This program is much more basic than dc and currently lacks some notable features like:
-- decimal numbers
 - input/output radices
 
 ## License
