@@ -39,7 +39,6 @@ SOFTWARE.
 /**
  * Things to be done next:
  * TODO: Read a script file
- * TODO: Read a line from stdin at runtime (?)
  */
 
 

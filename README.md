@@ -108,6 +108,8 @@ $ ./rpn
 
 `X` Pops the top value and pushes its scale: the number of fractional digits of a number, or 0 for a string.
 
+`?` Reads one line from the standard input, echoes it (unless the input is a terminal, which already echoes), and executes it as a new macro level (so `q` in such a line unwinds it and its caller). At EOF the program exits silently.
+
 Numbers are stored in base 10 internally: the input base converts digits at parse time (a fraction of `f` digits is truncated to `f` decimal digits), and the output base converts at print time (the integer part in that base; the fraction with `ceil(log_base(10^scale))` digits). `P` always prints bytes of the integer part, whatever the output base.
 
 `+` and `-` push the result at scale `max` of the two operand scales; `*` pushes `a*b` at scale `min(scale(a)+scale(b), max(scale(a), scale(b), k))`.
@@ -221,7 +223,6 @@ rpn deliberately differs from dc in the following ways:
 
 ## Limitations
 This program is much more basic than dc and currently lacks some notable features like:
-- reading a line from the standard input at runtime (`?`)
 - script files: positional arguments are not read as scripts, only `-e` and stdin work
 - the shell escape (`!`) is not implemented
 

@@ -67,6 +67,20 @@ deep_open=$(yes '[' | head -n 20000 | tr -d '\n')
 deep_close=$(yes ']x' | head -n 20000 | tr -d '\n')
 expect_err "${deep_open}1p${deep_close}" "macro nesting too deep"
 
+# ? chain: each ? reads another line and recurses one level deeper, so the
+# depth cap must fire before the C stack overflows (regression: SIGSEGV).
+tests_run=$((tests_run + 1))
+yes '?' | head -n 30000 | "$RPN_BIN" >/dev/null 2>"$errfile"
+code=$?
+if [ "$code" -ge 128 ]; then
+    failures=$((failures + 1))
+    echo "FAIL ?-chain 30000: crashed with exit $code (depth guard missing)"
+elif ! grep -q "macro nesting too deep" "$errfile"; then
+    failures=$((failures + 1))
+    echo "FAIL ?-chain 30000: expected 'macro nesting too deep' on stderr, got exit $code"
+    head -3 "$errfile" | sed 's/^/    /'
+fi
+
 # ===== Oversized exponent (allocation-bomb guard) =====
 expect_err "2 18446744073709551615 ^" "exponent too large in raise"
 expect_err "_2 18446744073709551615 ^" "exponent too large in raise"

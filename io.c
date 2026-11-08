@@ -29,6 +29,7 @@ SOFTWARE.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <stdckdint.h>
 
 #include "io.h"
@@ -61,6 +62,15 @@ char *read_line(void) {
     if (len > 0 && line[len - 1] == '\n')
         line[--len] = '\0';
     return line;
+}
+
+/**
+ * Whether the standard input is a terminal (which already echoes what the
+ * user types, so no explicit echo is needed)
+ * @return true when stdin is a tty
+ */
+bool stdin_is_tty(void) {
+    return isatty(fileno(stdin));
 }
 
 void printUsage(const char *progName) {

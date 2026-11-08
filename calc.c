@@ -356,11 +356,27 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
 }
 
 /**
+ * Run str as a macro one level deeper, depth-limited so runaway recursion
+ * (self-executing macro or ? chain) errors out instead of overflowing the
+ * C stack.
+ * @param s Stack to modify
+ * @param regs Register file, forwarded to the macro
+ * @param str Commands to execute (not retained)
+ * @param depth Current macro nesting depth
+ * @return The stack after the execution
+ */
+static Stack _calc_run_macro(Stack s, Registers regs, char *str, int depth) {
+    if (depth >= MAX_MACRO_DEPTH) {
+        _calc_error("macro nesting too deep");
+        return s;
+    }
+    return _calc_parse_depth(s, regs, str, depth + 1);
+}
+
+/**
  * Execute the top value of the stack as a macro (the core of x): a
  * string is popped and its contents are run as commands on the same stack,
- * so macros can nest; a number is left untouched. Nesting is
- * depth-limited so a self-re-executing macro (e.g. [[dx]x]dx) errors out
- * instead of overflowing the C stack.
+ * so macros can nest; a number is left untouched.
  * @param s Stack to modify (non-empty)
  * @param regs Register file, forwarded to the macro
  * @param depth Current macro nesting depth
@@ -369,14 +385,34 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
 static Stack _calc_exec_top(Stack s, Registers regs, int depth) {
     if (stack_top(s)->kind != VAL_STR)
         return s;
-    if (depth >= MAX_MACRO_DEPTH) {
-        _calc_error("macro nesting too deep");
-        return s;
-    }
     Value a;
     s = stack_pop(s, &a);
-    s = _calc_parse_depth(s, regs, a.str, depth + 1);
+    s = _calc_run_macro(s, regs, a.str, depth);
     value_clear(&a);
+    return s;
+}
+
+/**
+ * ? command: read a line from stdin, echo it (unless stdin is a tty, which
+ * already echoes), and execute it as a new macro level; at EOF unwind every
+ * enclosing level and exit silently, as in dc.
+ * @param s Stack to modify
+ * @param regs Register file, forwarded to the line
+ * @param depth Current macro nesting depth
+ * @return The stack after the command
+ */
+static Stack _calc_read_stdin(Stack s, Registers regs, int depth) {
+    char *line = read_line();
+    if (!line) {
+        // EOF: unwind all enclosing levels, then stop the top-level reader
+        _calc_quit = depth + 1;
+        _calc_exitAll = true;
+        return s;
+    }
+    if (!stdin_is_tty())
+        puts(line);
+    s = _calc_run_macro(s, regs, line, depth);
+    free(line);
     return s;
 }
 
@@ -440,7 +476,7 @@ static Stack _calc_conditional(Stack s, Registers regs, const char *op, unsigned
  * @param regs Register file to modify (forwarded to x for macros)
  * @param command A single part of the input (e.g. an operand, an operator or
  * an instruction)
- * @param depth Current macro nesting depth, forwarded to x
+ * @param depth Current macro nesting depth, forwarded to x and ?
  * @return The top of the stack after performing the command
  */
 static Stack _calc_proceed(Stack s, Registers regs, const char* command, int depth) {
@@ -674,6 +710,10 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
         }
         return _calc_exec_top(s, regs, depth);
     }
+
+    // ?: read a line from stdin and execute it (see _calc_read_stdin)
+    if (strcmp(command, "?") == 0)
+        return _calc_read_stdin(s, regs, depth);
 
     // q: quit two levels of macro execution (the current macro and its
     // invoker); issued at the top level or in a macro called directly from
