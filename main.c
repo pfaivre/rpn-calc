@@ -40,7 +40,7 @@ SOFTWARE.
  * Things to be done next:
  * TODO: Read a script file
  * TODO: Support arbitrary input/output radices
- * TODO: Support conditionals
+ * TODO: Support q/Q to abort macros
  * TODO: Support arbitrary precision for decimal
  */
 

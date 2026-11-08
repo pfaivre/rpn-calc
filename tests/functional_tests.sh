@@ -646,6 +646,49 @@ test_error ";a"  "stack underflow"
 # Compact notation
 test "5salap"  "5"
 
+# ===== CONDITIONALS (> < = !> !< !=) =====
+# Two values are popped and compared as numbers; the register fires when the
+# original top of stack satisfies the comparison against the second value.
+# The register is executed as a macro but not consumed.
+
+test "[9 p] sa 1 2 >a"  "9"           # 2 > 1: fires
+test "[9 p] sa 2 1 >a 7 p"  "7"       # 1 > 2: does not fire
+test "[9 p] sa 1 2 >a 1 2 >a"  $'9\n9'  # the register is not consumed
+test "[9 p] sa 2 1 >a f"  ""          # false: both values popped, nothing fired
+test "[9 p] sa 1 2 >a f"  $'9\n9'     # true: the macro ran and left its 9
+
+test "[8 p] sa 5 5 =a"  "8"
+test "[8 p] sa 5 6 =a 7 p"  "7"
+test "[8 p] sa 5 6 !=a"  "8"
+test "[8 p] sa 5 5 !=a 7 p"  "7"
+test "[8 p] sa 5 5 !>a"  "8"          # !> fires on top <= second
+test "[8 p] sa 5 6 !>a 7 p"  "7"
+test "[8 p] sa 6 5 !>a"  "8"
+test "[8 p] sa 5 5 !<a"  "8"          # !< fires on top >= second
+test "[8 p] sa 5 6 !<a"  "8"
+test "[8 p] sa 4 6 !<a 7 p"  $'8\n7'  # top 6 >= second 4: fires
+test "[8 p] sa 1 _1 >a 7 p"  "7"      # negatives compare numerically
+test "[8 p] sa _1 1 >a"  "8"
+
+# Comparisons are numeric only; a string operand errors and stays on the stack
+test_error_stack "1 [a] >a f"  $'a\n1'  "non-numeric value"
+test_error_stack "[a] [b] >a f"  $'b\na'  "non-numeric value"
+test_error "1 >a"  "stack underflow"
+test_error ">a"  "stack underflow"
+test_error "1 2 >"  "expected a single-character register name"
+
+# An empty register fires as a load of 0, which x then leaves on the stack
+test "1 2 >z f"  "0"
+# A number in a fired register is left on the stack (x on a number is a no-op)
+test "5 sa 1 2 >a f"  "5"
+
+# Conditionals work inside macros, and loops are possible: countdown from 5
+test "[8 p] sb [1 2 >b] sa 1 2 >a"  "8"
+test "5 sc [lc p lc 1 - sc 0 lc >m] sm lmx"  $'5\n4\n3\n2\n1'
+
+# Compact notation
+test "[9p]sa 1 2>a"  "9"
+
 # ===== SUMMARY =====
 
 if [ "$failures" -eq 0 ]; then

@@ -298,6 +298,85 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
 }
 
 /**
+ * Execute the top value of the stack as a macro (the core of dc's x): a
+ * string is popped and its contents are run as commands on the same stack,
+ * so macros can nest; a number is left untouched, as in dc. Nesting is
+ * depth-limited so a self-re-executing macro (e.g. [[dx]x]dx) errors out
+ * instead of overflowing the C stack.
+ * @param s Stack to modify (non-empty)
+ * @param regs Register file, forwarded to the macro
+ * @param depth Current macro nesting depth
+ * @return The stack after the execution
+ */
+static Stack _calc_exec_top(Stack s, Registers regs, int depth) {
+    if (stack_top(s)->kind != VAL_STR)
+        return s;
+    if (depth >= MAX_MACRO_DEPTH) {
+        _calc_error("macro nesting too deep");
+        return s;
+    }
+    Value a;
+    s = stack_pop(s, &a);
+    s = _calc_parse_depth(s, regs, a.str, depth + 1);
+    value_clear(&a);
+    return s;
+}
+
+/**
+ * Performs a comparison conditional (>, <, =, !>, !< or !=), whose register
+ * name is given separately (it is the token following the operator). Two
+ * values are popped and compared as numbers; when the original top of
+ * stack satisfies the comparison against the second value, the named
+ * register is executed as a macro (without being popped), as in dc.
+ * @param s Stack to modify
+ * @param regs Register file
+ * @param op The operator: ">", "<", "=", "!>", "!<" or "!="
+ * @param name The register name (one byte)
+ * @param depth Current macro nesting depth, forwarded to the executed macro
+ * @return The stack after performing the command
+ */
+static Stack _calc_conditional(Stack s, Registers regs, const char *op, unsigned char name, int depth) {
+    if (!stack_hasAtLeast(s, 2)) {
+        _calc_error("stack underflow");
+        return s;
+    }
+    if (!_calc_top_two_numeric(s)) {
+        _calc_error("non-numeric value");
+        return s;
+    }
+    // dc compares the original top-of-stack against the second value
+    int cmp = mpz_cmp(stack_top(s)->num, stack_second(s)->num);
+    Value a, b;
+    s = stack_pop(s, &a);
+    s = stack_pop(s, &b);
+    value_clear(&a);
+    value_clear(&b);
+
+    // The operator is ">", "<" or "=", optionally negated by a leading '!'
+    // (dc's !>, !< and !=)
+    bool neg = op[0] == '!';
+    char base = neg ? op[1] : op[0];
+    bool fire;
+    switch (base) {
+        case '>': fire = neg ? cmp <= 0 : cmp > 0; break;
+        case '<': fire = neg ? cmp >= 0 : cmp < 0; break;
+        default:  fire = neg ? cmp != 0 : cmp == 0; break;  // '='
+    }
+    if (!fire)
+        return s;
+
+    // Fire: execute the register like "l r x" — push a copy of its top
+    // (0 when the register is empty), then run it if it is a string. The
+    // register itself is not popped.
+    Stack rs = register_stack(regs, name);
+    if (stack_hasAtLeast(rs, 1))
+        s = stack_push_value(s, *stack_top(rs));
+    else
+        s = _calc_push_zero(s);
+    return _calc_exec_top(s, regs, depth);
+}
+
+/**
  * Performs a single command
  * @param s Stack to modify
  * @param regs Register file to modify (forwarded to x for macros)
@@ -512,25 +591,13 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
 
     // Execute the top value as a macro (dc's x): a string is popped and its
     // contents are run as commands on the same stack, so macros can nest.
-    // A number is left untouched, as in dc. Nesting is depth-limited so a
-    // self-re-executing macro (e.g. [[dx]x]dx) errors out instead of
-    // overflowing the C stack.
+    // A number is left untouched, as in dc.
     if (strcmp(command, "x") == 0) {
         if (!stack_hasAtLeast(s, 1)) {
             _calc_error("stack underflow");
             return s;
         }
-        if (stack_top(s)->kind == VAL_STR) {
-            if (depth >= MAX_MACRO_DEPTH) {
-                _calc_error("macro nesting too deep");
-                return s;
-            }
-            Value a;
-            s = stack_pop(s, &a);
-            s = _calc_parse_depth(s, regs, a.str, depth + 1);
-            value_clear(&a);
-        }
-        return s;
+        return _calc_exec_top(s, regs, depth);
     }
 
     _calc_errorf("'%s' unimplemented", command);
@@ -544,6 +611,10 @@ static bool _calc_tokenThreshold(char c1, char c2) {
     // digit or minus sign (_) followed by an other digit
     if ((c1 == '_' || (c1 >= '0' && c1 <= '9'))
         && (c2 >= '0' && c2 <= '9'))
+        return false;
+
+    // the two-character conditionals !>, !< and !=
+    if (c1 == '!' && (c2 == '>' || c2 == '<' || c2 == '='))
         return false;
 
     return true;
@@ -684,6 +755,21 @@ static Stack _calc_parse_depth(Stack s, Registers regs, char* string, int depth)
             if (name < 0)
                 break;
             s = _calc_register_cmd(s, regs, cmd, (unsigned char) name);
+            continue;
+        }
+
+        // Comparison conditionals (>, <, =, !>, !<, !=) also take the register
+        // name as the next token. A token starting with >, < or = is always a
+        // single char (the tokenizer splits after any non-digit); a token
+        // starting with ! is two chars only for the !>, !< and != operators.
+        if (strchr("><=", token[0]) != NULL
+            || (token[0] == '!' && token[1] != '\0' && token[2] == '\0'
+                && strchr("><=", token[1]) != NULL)) {
+            char op[3] = { token[0], token[1], '\0' };
+            int name = _calc_register_name(&ptr, token);
+            if (name < 0)
+                break;
+            s = _calc_conditional(s, regs, op, (unsigned char) name, depth);
             continue;
         }
 
