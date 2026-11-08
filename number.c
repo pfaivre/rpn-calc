@@ -317,6 +317,24 @@ void number_int_part(const Value *v, mpz_t out) {
     }
 }
 
+long number_length(const Value *v) {
+    if (v->kind == VAL_STR)
+        return (long) strlen(v->str);
+    // mpz_sizeinbase ignores the sign and is exact or one too big for base 10
+    // (a non-power-of-2 base): when the estimate n is > 1 and |num| < 10^(n-1),
+    // the exact digit count is n-1
+    size_t n = mpz_sizeinbase(v->num, 10);  // >= 1, even for 0
+    if (n > 1) {
+        mpz_t p;
+        mpz_init(p);
+        pow10(p, (long) n - 1);
+        if (mpz_cmpabs(v->num, p) < 0)
+            n--;
+        mpz_clear(p);
+    }
+    return (long) n;
+}
+
 /** a +/- b with result scale max(sa, sb) */
 static const char *number_addsub(const Value *a, const Value *b, bool sub, Value *out) {
     long rs = a->scale > b->scale ? a->scale : b->scale;

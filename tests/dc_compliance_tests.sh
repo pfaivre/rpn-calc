@@ -222,6 +222,31 @@ same "[a] i 5 p"
 same "[a] o 5 p"
 same "16 i G p"                      # 'G' is not a digit char: both error
 
+# ===== IDENTICAL TO dc: stack introspection (z Z X) =====
+same "1 2 3 z f"          $'3\n3\n2\n1'
+same "z p"                "0"
+same "123 Z p"            "3"
+same "0 Z p"              "1"
+same "_12 Z p"            "2"
+same "1.50 Z p"           "3"
+same ".5 Z p"             "1"
+same "[hello] Z p"        "5"
+same "[] Z p"             "0"
+same "2 10 ^ Z p"         "4"
+same "8 Z p"              "1"       # mpz_sizeinbase(8,10) is one too big
+same "64 Z p"             "2"
+same "512 Z p"            "3"
+same "99999999999999999999 Z p"  "20"
+same "_1.50 Z p"          "3"
+same "16 o 8 Z p"         "1"
+same "5 X p"              "0"
+same "1.50 X p"           "2"
+same "1.50 X f"           "2"        # X pops
+same "[hi] X p"           "0"
+same "2 k 1 3 / X p"      "2"
+same "Z"                              # both error on empty stack
+same "X"
+
 # ===== DELIBERATE DIVERGENCES from dc (each pinned, with dc's behavior noted) =====
 
 # rpn exits 1 when any command failed; dc always exits 0. Session continues in both.

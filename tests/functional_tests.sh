@@ -416,7 +416,6 @@ test_exit 1 -z   # unknown option
 # the session itself keeps running, so later lines are still evaluated
 
 # Unimplemented command
-test_error "z"  "unimplemented"
 test_error "wy"  "'w' unimplemented"
 
 # Division by zero (operands stay on the stack, for /, % and ~ alike)
@@ -453,7 +452,7 @@ test_exit_stdin 0 "10"  '5 5 + p\n'
 
 # Any runtime error makes the process exit 1
 test_exit 1 -e "1 0 /"
-test_exit 1 -e "z"
+test_exit 1 -e "wy"
 test_exit_stdin 1 ""  '5 0 /\n'
 test_exit_stdin 1 ""  '5 0 %\n'
 test_exit_stdin 1 ""  '10 0 ~\n'
@@ -977,6 +976,46 @@ test_error "99999999999999999999 o 5 p"  "output base must be a number greater t
 test "16 i FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF p"  "340282366920938463463374607431768211455"
 test "2 i 1111111111111111111111111111111111111111111111111111111111111111 p"  "18446744073709551615"
 test "FFFFFFFFFFFFFFFFFFFFFFFFFFF p"  "1666666666666666666666666665"
+
+# ===== STACK INTROSPECTION (z Z X) =====
+
+# z pushes the stack depth without popping
+test "z p"  "0"
+test "1 2 3 z f"  $'3\n3\n2\n1'
+test "1 z f"  $'1\n1'
+
+# Z pops and pushes the decimal digit count of a number (sign and point not
+# counted), or the character count of a string. The values 8, 9, 64, 512, 99
+# and 99999999999999999999 pin the exact count: mpz_sizeinbase(_, 10) is
+# one too big for them, so they catch an uncorrected upper bound.
+test "123 Z p"  "3"
+test "0 Z p"  "1"
+test "_12 Z p"  "2"
+test "100 Z p"  "3"
+test "1.50 Z p"  "3"
+test ".5 Z p"  "1"
+test "[hello] Z p"  "5"
+test "[] Z p"  "0"
+test "2 10 ^ Z p"  "4"
+test "8 Z p"  "1"
+test "9 Z p"  "1"
+test "64 Z p"  "2"
+test "512 Z p"  "3"
+test "99 Z p"  "2"
+test "10 Z p"  "2"
+test "_1.50 Z p"  "3"
+test "99999999999999999999 Z p"  "20"
+test "16 o 8 Z p"  "1"
+test_error "Z"  "stack underflow"
+
+# X pops and pushes the scale of the value (0 for a string)
+test "5 X p"  "0"
+test "1.50 X p"  "2"
+test "1.50 X f"  "2"          # X popped the 1.50
+test "[hi] X p"  "0"
+test "16 o 0.5 X p"  "1"
+test "2 k 1 3 / X p"  "2"
+test_error "X"  "stack underflow"
 
 # ===== SUMMARY =====
 

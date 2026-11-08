@@ -102,6 +102,12 @@ $ ./rpn
 
 `O` Pushes the current output base.
 
+`z` Pushes the depth of the stack (without popping).
+
+`Z` Pops the top value and pushes its length: the number of decimal digits of a number (the sign and the point are not counted), or the number of characters of a string.
+
+`X` Pops the top value and pushes its scale: the number of fractional digits of a number, or 0 for a string.
+
 Numbers are stored in base 10 internally: the input base converts digits at parse time (a fraction of `f` digits is truncated to `f` decimal digits), and the output base converts at print time (the integer part in that base; the fraction with `ceil(log_base(10^scale))` digits). `P` always prints bytes of the integer part, whatever the output base.
 
 `+` and `-` push the result at scale `max` of the two operand scales; `*` pushes `a*b` at scale `min(scale(a)+scale(b), max(scale(a), scale(b), k))`.
@@ -178,6 +184,7 @@ For the commands listed above, rpn behaves like dc (checked against GNU dc 1.5.2
 - Conditionals `>r`, `<r`, `=r`, `!>r`, `!<r`, `!=r`: two values popped and compared as numbers (top against second), the register executed as a macro when the condition holds, without being consumed; a string operand reports `non-numeric value` with the operands kept.
 - `q` (quit two levels, exiting the program at the top level or in a directly-called macro) and `Q` (pop a count, quit that many levels, never exit; over-depth counts still quit the available levels and invalid counts are errors, as in dc).
 - Input/output bases `i`/`I`/`o`/`O` in 2..16: digits `0`-`9` and `A`-`F` are read in the input base (letters keep their face value even beyond the base), numbers are stored base 10 internally, and printing converts to the output base — integer part in that base, fraction with `ceil(log_base(10^scale))` digits, uppercase digits, no leading zero before the point, zero as `0`. `P` prints bytes of the integer part in any base.
+- Stack introspection: `z` pushes the stack depth, `Z` pops and pushes the decimal digit count of a number (or character count of a string), `X` pops and pushes the scale of the value.
 - The `-e` option, executed one macro level above the top level as in dc, and reading expressions from standard input without it.
 
 rpn deliberately differs from dc in the following ways:
@@ -214,7 +221,6 @@ rpn deliberately differs from dc in the following ways:
 
 ## Limitations
 This program is much more basic than dc and currently lacks some notable features like:
-- stack introspection (`z` stack depth, `Z` digits of the top value, `X` its scale)
 - reading a line from the standard input at runtime (`?`)
 - script files: positional arguments are not read as scripts, only `-e` and stdin work
 - the shell escape (`!`) is not implemented

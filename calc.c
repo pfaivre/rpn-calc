@@ -224,9 +224,7 @@ static Stack _calc_pop_base(Stack s, long *slot, const char *low_err, const char
 }
 
 /**
- * Push a long as a number value onto the stack (0 for the load of an empty
- * register or of a never-stored array cell, the scale factor K, the bases
- * I and O)
+ * Push a long as a number value onto the stack at scale 0
  * @param s Stack to modify
  * @param v The value to push
  * @return The stack with v on top
@@ -237,6 +235,22 @@ static Stack _calc_push_long(Stack s, long v) {
     s = stack_push_num(s, m);
     mpz_clear(m);
     return s;
+}
+
+/**
+ * Pop the top value into *out, reporting an underflow error and leaving the
+ * stack unchanged when the stack is empty
+ * @param s Stack to pop from (updated in place)
+ * @param out The popped value (ownership moves to the caller on success)
+ * @return true on success, false on underflow (stack unchanged)
+ */
+static bool _calc_pop_one(Stack *s, Value *out) {
+    if (!stack_hasAtLeast(*s, 1)) {
+        _calc_error("stack underflow");
+        return false;
+    }
+    *s = stack_pop(*s, out);
+    return true;
 }
 
 /**
@@ -557,6 +571,33 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
     if (strcmp(command, "O") == 0)
         return _calc_push_long(s, _calc_out_base);
 
+    // z: push the depth of the stack (without popping)
+    if (strcmp(command, "z") == 0)
+        return _calc_push_long(s, (long) s->size);
+
+    // Z: pop the top value and push its length: the number of decimal digits
+    // of a number (the sign and the point are not counted), or the number of
+    // characters of a string
+    if (strcmp(command, "Z") == 0) {
+        Value a;
+        if (!_calc_pop_one(&s, &a))
+            return s;
+        long len = number_length(&a);
+        value_clear(&a);
+        return _calc_push_long(s, len);
+    }
+
+    // X: pop the top value and push its scale (the number of fractional
+    // digits; 0 for a string)
+    if (strcmp(command, "X") == 0) {
+        Value a;
+        if (!_calc_pop_one(&s, &a))
+            return s;
+        long scale = a.kind == VAL_NUM ? a.scale : 0;
+        value_clear(&a);
+        return _calc_push_long(s, scale);
+    }
+
     // Clear the stack
     if (strcmp(command, "c") == 0)
         return stack_clear(s);
@@ -573,12 +614,9 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
 
     // Pop the top value and print it without a trailing newline
     if (strcmp(command, "n") == 0) {
-        if (!stack_hasAtLeast(s, 1)) {
-            _calc_error("stack underflow");
-            return s;
-        }
         Value a;
-        s = stack_pop(s, &a);
+        if (!_calc_pop_one(&s, &a))
+            return s;
         _calc_print(&a, false);
         value_clear(&a);
         return s;
@@ -588,12 +626,9 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
     // is printed as-is, a number as a string of bytes, most significant
     // byte of its absolute value first
     if (strcmp(command, "P") == 0) {
-        if (!stack_hasAtLeast(s, 1)) {
-            _calc_error("stack underflow");
-            return s;
-        }
         Value a;
-        s = stack_pop(s, &a);
+        if (!_calc_pop_one(&s, &a))
+            return s;
         if (a.kind == VAL_STR)
             fputs(a.str, stdout);
         else
