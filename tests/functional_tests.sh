@@ -109,6 +109,22 @@ function test_e ()
     fi
 }
 
+# test_e_error EXPECTED_STDERR_SUBSTRING ARGS... -- ./rpn ARGS... writes the substring to stderr
+function test_e_error ()
+{
+    local expected_error=$1
+    shift
+    local error_result
+
+    tests_run=$((tests_run + 1))
+    error_result=$(./rpn "$@" 2>&1 >/dev/null)
+
+    if [[ "$error_result" != *"$expected_error"* ]]; then
+        failures=$((failures + 1))
+        echo "FAIL './rpn $*': expected stderr to contain '$expected_error', got '$error_result'"
+    fi
+}
+
 # test_contains SUBSTRING ARGS... -- stdout of ./rpn ARGS... contains SUBSTRING
 function test_contains ()
 {
@@ -645,6 +661,98 @@ test_error ";a"  "stack underflow"
 
 # Compact notation
 test "5salap"  "5"
+
+# ===== CONDITIONALS (> < = !> !< !=) =====
+# Two values are popped and compared as numbers; the register fires when the
+# original top of stack satisfies the comparison against the second value.
+# The register is executed as a macro but not consumed.
+
+test "[9 p] sa 1 2 >a"  "9"           # 2 > 1: fires
+test "[9 p] sa 2 1 >a 7 p"  "7"       # 1 > 2: does not fire
+test "[9 p] sa 1 2 >a 1 2 >a"  $'9\n9'  # the register is not consumed
+test "[9 p] sa 2 1 >a f"  ""          # false: both values popped, nothing fired
+test "[9 p] sa 1 2 >a f"  $'9\n9'     # true: the macro ran and left its 9
+
+test "[8 p] sa 5 5 =a"  "8"
+test "[8 p] sa 5 6 =a 7 p"  "7"
+test "[8 p] sa 5 6 !=a"  "8"
+test "[8 p] sa 5 5 !=a 7 p"  "7"
+test "[8 p] sa 5 5 !>a"  "8"          # !> fires on top <= second
+test "[8 p] sa 5 6 !>a 7 p"  "7"
+test "[8 p] sa 6 5 !>a"  "8"
+test "[8 p] sa 5 5 !<a"  "8"          # !< fires on top >= second
+test "[8 p] sa 5 6 !<a"  "8"
+test "[8 p] sa 4 6 !<a 7 p"  $'8\n7'  # top 6 >= second 4: fires
+test "[8 p] sa 1 _1 >a 7 p"  "7"      # negatives compare numerically
+test "[8 p] sa _1 1 >a"  "8"
+
+# Comparisons are numeric only; a string operand errors and stays on the stack
+test_error_stack "1 [a] >a f"  $'a\n1'  "non-numeric value"
+test_error_stack "[a] [b] >a f"  $'b\na'  "non-numeric value"
+test_error "1 >a"  "stack underflow"
+test_error ">a"  "stack underflow"
+test_error "1 2 >"  "expected a single-character register name"
+
+# An empty register fires as a load of 0, which x then leaves on the stack
+test "1 2 >z f"  "0"
+# A number in a fired register is left on the stack (x on a number is a no-op)
+test "5 sa 1 2 >a f"  "5"
+
+# Conditionals work inside macros, and loops are possible: countdown from 5
+test "[8 p] sb [1 2 >b] sa 1 2 >a"  "8"
+test "5 sc [lc p lc 1 - sc 0 lc >m] sm lmx"  $'5\n4\n3\n2\n1'
+
+# Compact notation
+test "[9p]sa 1 2>a"  "9"
+
+# ===== q AND Q =====
+
+# q quits two levels of macro execution (the current macro and its invoker);
+# at the top level, or in a macro called directly from the top level, it
+# exits the program. A numeric top of stack is not popped.
+test "1 p q 3 p"  "1"
+test_lines "1"  '1 p q\n3 p\n'                 # stops reading further lines
+test "[1 p q 2 p] x 3 p"  "1"                  # top-level-called macro: exits
+test "[1 p q 2 p] sa lax 3 p"  "1"
+test "[[1 p q 2 p] x 3 p] x 4 p"  $'1\n4'      # at depth 2, unwinds two levels
+test "[[7 q] x] x f"  "7"                      # q does not pop a numeric top
+test "[[1 p 2 q 2 p] x 3 p] x 4 p"  $'1\n4'    # the number before q is not a count
+test_exit_stdin 0 "1"  '1 p q\n'
+
+# Q pops a count N and quits N levels of macro execution; it never exits
+test "[1 p 1 Q 2 p] x 3 p"  $'1\n3'
+test "[[1 p 2 Q 2 p] x 3 p] x 4 p"  $'1\n4'
+test "[1 p 0 Q 2 p] x 3 p"  $'1\n2\n3'         # 0 Q is a no-op
+test "0 Q 5 p"  "5"
+test_error_stack "2 Q f"  ""  "exceeded string execution depth"  # count popped on error
+test_error_stack "[a] Q f"  "a"  "requires a number >= 0"        # operand kept
+test_error_stack "_1 Q f"  "-1"  "requires a number >= 0"
+test_error_stack "999999999999999999999 Q f"  "999999999999999999999"  "requires a number >= 0"
+test_error "Q"  "stack underflow"
+test_error_stack "1 p 1 Q 2 p"  $'1\n2'  "exceeded string execution depth"  # Q never exits
+
+# A loop terminated by Q fired from a conditional (verified against dc)
+test "3 sc [1 Q] sq [lc p lc 1 - sc lc 0 =q 0 lc >m] sm lmx"  $'3\n2\n1'
+
+# Over-depth Q (N > depth) is an error (count popped) but still unwinds the
+# available levels, min(N, depth), as in dc
+test_error_stack "[1 p 2 Q 2 p] x 3 p"  $'1\n3'  "exceeded string execution depth"
+test_error_stack "[1 p 3 Q 9 p] x 3 p"  $'1\n3'  "exceeded string execution depth"
+test_error_stack "[[1 p 3 Q 9 p] x 3 p] x 4 p"  $'1\n4'  "exceeded string execution depth"
+test_error_stack "[[[1 p 5 Q 2 p] x 3 p] x 4 p] x 5 p"  $'1\n5'  "exceeded string execution depth"
+test_error_stack "[2 Q] x 5 p"  "5"  "exceeded string execution depth"
+
+# ===== -e RUNS AT MACRO DEPTH 1 (as in dc) =====
+
+# In -e mode the expression is one macro level above the top level, so q/Q
+# counting matches dc: 1 Q at depth 1 is valid and unwinds the -e frame
+test_e "" -e "1 Q 5 p"
+test_e "" -e "[2 Q] x 5 p"
+test_e "5" -e "0 Q 5 p"
+test_e "1" -e "1 p q 3 p"
+test_e "5" -e "5 p"
+test_e "1" -e "[1 p 2 Q 2 p] x 3 p"       # 2 Q at depth 2: valid, unwinds both frames
+test_e_error "exceeded string execution depth" -e "5 Q 3 p"  # over-depth at depth 1: error, unwinds the -e frame
 
 # ===== SUMMARY =====
 

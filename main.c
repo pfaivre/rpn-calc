@@ -40,7 +40,6 @@ SOFTWARE.
  * Things to be done next:
  * TODO: Read a script file
  * TODO: Support arbitrary input/output radices
- * TODO: Support conditionals
  * TODO: Support arbitrary precision for decimal
  */
 
@@ -83,9 +82,10 @@ int main(int argc, char **argv) {
     Stack s = stack_init();
     Registers regs = registers_init();
 
-    // Option -e: evaluate the concatenated expressions as one input
+    // Option -e: evaluate the concatenated expressions as one input, at
+    // macro depth 1 like dc's -e strings
     if (expression) {
-        s = calc_parse(s, regs, expression);
+        s = calc_parse_expression(s, regs, expression);
         free(expression);
     }
     // Otherwise read expressions from the standard input, one per line
@@ -94,6 +94,8 @@ int main(int argc, char **argv) {
         while ((line = read_line()) != NULL) {
             s = calc_parse(s, regs, line);
             free(line);
+            if (calc_quit_requested())  // q at the top level exits the program
+                break;
         }
     }
 

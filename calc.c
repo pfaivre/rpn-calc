@@ -46,6 +46,14 @@ SOFTWARE.
 
 static bool _calc_errorFlag = false;
 
+/* Levels of macro execution still to unwind, set by q/Q: when a frame of
+ * _calc_parse_depth sees it positive, it abandons the rest of its input */
+static int _calc_quit = 0;
+
+/* Set by q when issued at the top level or in a macro called directly from
+ * the top level: the whole program exits in that case */
+static bool _calc_exitAll = false;
+
 /**
  * Report a formatted error on stderr and remember it, so main can exit
  * non-zero
@@ -75,6 +83,15 @@ static void _calc_error(const char *msg) {
  */
 bool calc_had_error() {
     return _calc_errorFlag;
+}
+
+/**
+ * Whether q asked to leave the top-level input: main stops reading lines
+ * and exits when this is true after a top-level parse
+ * @return true if q/Q unwound past the top level
+ */
+bool calc_quit_requested() {
+    return _calc_quit > 0 || _calc_exitAll;
 }
 
 typedef void (*MpzBinop)(mpz_t, const mpz_t, const mpz_t);
@@ -157,7 +174,7 @@ static void _calc_print(const Value *v, bool newline) {
 
 /**
  * Print a number as a string of bytes, most significant byte of its
- * absolute value first (dc's P); zero prints as a single NUL byte
+ * absolute value first; zero prints as a single NUL byte
  * @param num Number to print
  */
 static void _calc_print_bytes(const mpz_t num) {
@@ -171,7 +188,7 @@ static void _calc_print_bytes(const mpz_t num) {
     size_t count = 0;
     mpz_export(bytes, &count, 1, 1, 1, 0, abs);
     if (count == 0)
-        putchar(0);  // zero prints as a single NUL byte, as in dc
+        putchar(0);  // zero prints as a single NUL byte
     else
         fwrite(bytes, 1, count, stdout);
     free(bytes);
@@ -190,7 +207,7 @@ static bool _calc_is_index(const Value *v) {
 }
 
 /**
- * Push the number 0 onto the stack (dc's load of an empty register or of a
+ * Push the number 0 onto the stack (the load of an empty register or of a
  * never-stored array cell)
  * @param s Stack to modify
  * @return The stack with 0 on top
@@ -227,7 +244,7 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
             return s;
         }
         // l: push a copy of the register's top value; an empty register
-        // loads 0, as in dc
+        // loads 0
         case 'l': {
             Stack rs = register_stack(regs, name);
             if (stack_hasAtLeast(rs, 1))
@@ -295,6 +312,85 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
         }
     }
     return s;
+}
+
+/**
+ * Execute the top value of the stack as a macro (the core of x): a
+ * string is popped and its contents are run as commands on the same stack,
+ * so macros can nest; a number is left untouched. Nesting is
+ * depth-limited so a self-re-executing macro (e.g. [[dx]x]dx) errors out
+ * instead of overflowing the C stack.
+ * @param s Stack to modify (non-empty)
+ * @param regs Register file, forwarded to the macro
+ * @param depth Current macro nesting depth
+ * @return The stack after the execution
+ */
+static Stack _calc_exec_top(Stack s, Registers regs, int depth) {
+    if (stack_top(s)->kind != VAL_STR)
+        return s;
+    if (depth >= MAX_MACRO_DEPTH) {
+        _calc_error("macro nesting too deep");
+        return s;
+    }
+    Value a;
+    s = stack_pop(s, &a);
+    s = _calc_parse_depth(s, regs, a.str, depth + 1);
+    value_clear(&a);
+    return s;
+}
+
+/**
+ * Performs a comparison conditional (>, <, =, !>, !< or !=), whose register
+ * name is given separately (it is the token following the operator). Two
+ * values are popped and compared as numbers; when the original top of
+ * stack satisfies the comparison against the second value, the named
+ * register is executed as a macro (without being popped).
+ * @param s Stack to modify
+ * @param regs Register file
+ * @param op The operator: ">", "<", "=", "!>", "!<" or "!="
+ * @param name The register name (one byte)
+ * @param depth Current macro nesting depth, forwarded to the executed macro
+ * @return The stack after performing the command
+ */
+static Stack _calc_conditional(Stack s, Registers regs, const char *op, unsigned char name, int depth) {
+    if (!stack_hasAtLeast(s, 2)) {
+        _calc_error("stack underflow");
+        return s;
+    }
+    if (!_calc_top_two_numeric(s)) {
+        _calc_error("non-numeric value");
+        return s;
+    }
+    // compare the original top-of-stack against the second value
+    int cmp = mpz_cmp(stack_top(s)->num, stack_second(s)->num);
+    Value a, b;
+    s = stack_pop(s, &a);
+    s = stack_pop(s, &b);
+    value_clear(&a);
+    value_clear(&b);
+
+    // The operator is ">", "<" or "=", optionally negated by a leading '!'
+    // (!>, !< and !=)
+    bool neg = op[0] == '!';
+    char base = neg ? op[1] : op[0];
+    bool fire;
+    switch (base) {
+        case '>': fire = neg ? cmp <= 0 : cmp > 0; break;
+        case '<': fire = neg ? cmp >= 0 : cmp < 0; break;
+        default:  fire = neg ? cmp != 0 : cmp == 0; break;  // '='
+    }
+    if (!fire)
+        return s;
+
+    // Fire: execute the register like "l r x" — push a copy of its top
+    // (0 when the register is empty), then run it if it is a string. The
+    // register itself is not popped.
+    Stack rs = register_stack(regs, name);
+    if (stack_hasAtLeast(rs, 1))
+        s = stack_push_value(s, *stack_top(rs));
+    else
+        s = _calc_push_zero(s);
+    return _calc_exec_top(s, regs, depth);
 }
 
 /**
@@ -467,7 +563,7 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
 
     // Pop the top value and print it without a trailing newline: a string
     // is printed as-is, a number as a string of bytes, most significant
-    // byte of its absolute value first (dc's P)
+    // byte of its absolute value first
     if (strcmp(command, "P") == 0) {
         if (!stack_hasAtLeast(s, 1)) {
             _calc_error("stack underflow");
@@ -510,26 +606,48 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
         return s;
     }
 
-    // Execute the top value as a macro (dc's x): a string is popped and its
+    // Execute the top value as a macro (x): a string is popped and its
     // contents are run as commands on the same stack, so macros can nest.
-    // A number is left untouched, as in dc. Nesting is depth-limited so a
-    // self-re-executing macro (e.g. [[dx]x]dx) errors out instead of
-    // overflowing the C stack.
+    // A number is left untouched.
     if (strcmp(command, "x") == 0) {
         if (!stack_hasAtLeast(s, 1)) {
             _calc_error("stack underflow");
             return s;
         }
-        if (stack_top(s)->kind == VAL_STR) {
-            if (depth >= MAX_MACRO_DEPTH) {
-                _calc_error("macro nesting too deep");
-                return s;
-            }
-            Value a;
-            s = stack_pop(s, &a);
-            s = _calc_parse_depth(s, regs, a.str, depth + 1);
-            value_clear(&a);
+        return _calc_exec_top(s, regs, depth);
+    }
+
+    // q: quit two levels of macro execution (the current macro and its
+    // invoker); issued at the top level or in a macro called directly from
+    // the top level, it exits the program. A numeric top of stack
+    // is not popped.
+    if (strcmp(command, "q") == 0) {
+        _calc_quit = 2;
+        if (depth < 2)
+            _calc_exitAll = true;
+        return s;
+    }
+
+    // Q: pop a count N and quit N levels of macro execution; it never exits
+    // the program. As in dc, an over-depth count is an error (popped) but
+    // still quits the available levels, min(N, depth)
+    if (strcmp(command, "Q") == 0) {
+        if (!stack_hasAtLeast(s, 1)) {
+            _calc_error("stack underflow");
+            return s;
         }
+        if (stack_top(s)->kind != VAL_NUM || mpz_sgn(stack_top(s)->num) < 0
+            || !mpz_fits_slong_p(stack_top(s)->num)) {
+            _calc_error("Q command requires a number >= 0");
+            return s;
+        }
+        Value n;
+        s = stack_pop(s, &n);
+        long count = mpz_get_si(n.num);
+        if (count > depth)
+            _calc_error("Q command argument exceeded string execution depth");
+        _calc_quit = (int) (count < depth ? count : depth);
+        value_clear(&n);
         return s;
     }
 
@@ -544,6 +662,10 @@ static bool _calc_tokenThreshold(char c1, char c2) {
     // digit or minus sign (_) followed by an other digit
     if ((c1 == '_' || (c1 >= '0' && c1 <= '9'))
         && (c2 >= '0' && c2 <= '9'))
+        return false;
+
+    // the two-character conditionals !>, !< and !=
+    if (c1 == '!' && (c2 == '>' || c2 == '<' || c2 == '='))
         return false;
 
     return true;
@@ -582,7 +704,7 @@ static char *_calc_firstToken(char *token, char *str, bool *is_string) {
     }
 
     // String literal: copy everything up to the matching ']', keeping inner
-    // bracket pairs (dc allows nesting: [[a]b] is the string "[a]b")
+    // bracket pairs (nesting is allowed: [[a]b] is the string "[a]b")
     if (*str == '[') {
         int depth = 1;
         char *p = str + 1;
@@ -644,6 +766,23 @@ static int _calc_register_name(char **ptr, char *token) {
 }
 
 /**
+ * Whether a token is a comparison conditional operator (>, <, =, !>, !<, !=)
+ * @param token Token to inspect
+ * @return Pointer to the operator within token, or NULL when not a conditional
+ */
+static const char *_calc_conditional_op(const char *token) {
+    // >, < and = are always single-char tokens (the tokenizer splits after
+    // any non-digit)
+    if (strchr("><=", token[0]) != NULL)
+        return token;
+    // !>, !< and != are the only two-char tokens starting with !
+    if (token[0] == '!' && token[1] != '\0' && token[2] == '\0'
+        && strchr("><=", token[1]) != NULL)
+        return token;
+    return NULL;
+}
+
+/**
  * Performs a set of commands (e.g. "2 3*p") at a given macro nesting depth
  * @param s Stack to modify
  * @param regs Register file to modify
@@ -662,7 +801,17 @@ static Stack _calc_parse_depth(Stack s, Registers regs, char* string, int depth)
         rpn_fatal("memory allocation error");
 
     bool is_string;
-    while ((ptr = _calc_firstToken(token, ptr, &is_string)) != NULL) {
+    for (;;) {
+        // q/Q asked to unwind this level: abandon the rest of the input
+        if (_calc_quit > 0) {
+            _calc_quit--;
+            break;
+        }
+
+        ptr = _calc_firstToken(token, ptr, &is_string);
+        if (ptr == NULL)
+            break;
+
         // A [...] string literal is pushed as-is, even when empty or
         // starting with '#'
         if (is_string) {
@@ -687,6 +836,18 @@ static Stack _calc_parse_depth(Stack s, Registers regs, char* string, int depth)
             continue;
         }
 
+        // Comparison conditionals (>, <, =, !>, !<, !=) also take the register
+        // name as the next token
+        const char *op = _calc_conditional_op(token);
+        if (op != NULL) {
+            char opbuf[3] = { op[0], op[1], '\0' };
+            int name = _calc_register_name(&ptr, token);
+            if (name < 0)
+                break;
+            s = _calc_conditional(s, regs, opbuf, (unsigned char) name, depth);
+            continue;
+        }
+
         s = _calc_proceed(s, regs, token, depth);
     }
 
@@ -703,4 +864,17 @@ static Stack _calc_parse_depth(Stack s, Registers regs, char* string, int depth)
  */
 Stack calc_parse(Stack s, Registers regs, char* string) {
     return _calc_parse_depth(s, regs, string, 0);
+}
+
+/**
+ * Performs the commands of a -e expression. Like dc, -e strings are
+ * executed one macro level above the top level (depth 1), so q/Q counting
+ * in -e mode matches dc
+ * @param s Stack to modify
+ * @param regs Register file to modify
+ * @param string Commands to execute
+ * @return The top of the stack after performing the commands
+ */
+Stack calc_parse_expression(Stack s, Registers regs, char* string) {
+    return _calc_parse_depth(s, regs, string, 1);
 }

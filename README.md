@@ -111,6 +111,20 @@ $ ./rpn
 
 Registers are named by a single character (256 of them, case-sensitive, digits allowed) and persist across input lines. A register's value stack (`s`/`l`/`S`/`L`) and its array (`:`/`;`) are independent.
 
+`> r` Pops two values and compares them as numbers, executing register `r` as a macro (without consuming it) if the original top of stack is greater than the second. Thus `1 2 >a` invokes register `a`, while `2 1 >a` does not.
+
+`< r` Same, fires when the original top is less than the second.
+
+`= r` Same, fires when the two values are equal.
+
+`!> r`, `!< r`, `!= r` Same, but negated: fire when the original top is respectively less than or equal, greater than or equal, or not equal to the second.
+
+The comparison is numeric only: a string operand is an error and the operands stay on the stack. When the register fires, it is executed like `l r x` (an empty register loads 0, and `x` on a number does nothing). With registers, `x` and conditionals, loops are possible: `5 sc [lc p lc 1 - sc 0 lc >m] sm lmx` prints 5 4 3 2 1.
+
+`q` Quits two levels of macro execution (the current macro and the one that invoked it), abandoning the rest of their input. Issued at the top level, or in a macro called directly from the top level, it exits the program (like dc). A numeric top of stack is not popped.
+
+`Q` Pops a count N and quits N levels of macro execution, abandoning the rest of their input. It never exits the program: N larger than the current macro depth is an error (the count is popped, but the available levels are still quit, as in dc), and a non-number, negative or too-large count is an error with the operand kept.
+
 ## Compatibility with dc
 For the commands listed above, rpn behaves like dc (checked against GNU dc 1.5.2):
 
@@ -133,7 +147,9 @@ For the commands listed above, rpn behaves like dc (checked against GNU dc 1.5.2
 - String literals `[...]` (with nested brackets), and printing them with `p`, `n`, `P` and `f`: `p` adds a trailing newline, `n` and `P` pop the value and print without one, `f` prints one value per line, top first. Arithmetic on a string reports `non-numeric value` and leaves the operands on the stack, as in dc.
 - Macro execution with `x`: a string is popped and run as commands on the same stack, macros nest, and `x` on a number leaves the stack untouched.
 - Registers: `s`/`l`/`S`/`L` on a per-register value stack (with `s` replacing the content, `l` peeking, `L` erroring on an empty register stack, and `l` on an empty register loading 0), and `:`/`;` arrays per register (index on top, missing index loads 0, negative or non-numeric index rejected with the operands kept, values may be strings, a register's stack and array are independent).
-- The `-e` option, and reading expressions from standard input without it.
+- Conditionals `>r`, `<r`, `=r`, `!>r`, `!<r`, `!=r`: two values popped and compared as numbers (top against second), the register executed as a macro when the condition holds, without being consumed; a string operand reports `non-numeric value` with the operands kept.
+- `q` (quit two levels, exiting the program at the top level or in a directly-called macro) and `Q` (pop a count, quit that many levels, never exit; over-depth counts still quit the available levels and invalid counts are errors, as in dc).
+- The `-e` option, executed one macro level above the top level as in dc, and reading expressions from standard input without it.
 
 rpn deliberately differs from dc in the following ways:
 
@@ -143,12 +159,10 @@ rpn deliberately differs from dc in the following ways:
   session still continues after an error in both programs.
 - Integers only: no decimal point, no scale (`k`) and no input/output base
   (`i`, `o`) — input and output are always base 10.
-- No conditionals or loops: an unknown command such as `>a` is reported as
-  unimplemented, where dc would treat it as a conditional operation. Strings
-  can be pushed, printed, executed with `x` and stored in registers, but
-  there is no `q`/`Q` to abort a macro early. A `[...]` literal not closed
-  on the same line is an error, where dc keeps reading the following lines
-  into the string.
+- An unknown command such as `!` is reported as
+  unimplemented, where dc would run it as a shell escape. A `[...]` literal
+  not closed on the same line is an error, where dc keeps reading the
+  following lines into the string.
 - The register name is the next token, so `s a` names register `a`, where dc
   reads the very next character and would name a register after the space.
   A `#` comment is never a register name: `s # ...` reports `expected a
@@ -165,7 +179,7 @@ rpn deliberately differs from dc in the following ways:
 ## Limitations
 This program is much more basic than dc and currently lacks some notable features like:
 - decimal numbers
-- conditionals and loops
+- input/output radices
 
 ## License
 Copyright 2016-2026 Pierre Faivre. This is free software, and may be redistributed

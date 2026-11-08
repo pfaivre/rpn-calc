@@ -30,7 +30,13 @@ SOFTWARE.
 
 [[nodiscard]] Stack calc_parse(Stack s, Registers regs, char* string);
 
+/** Parse a -e command-line expression (at macro depth 1, as dc executes -e strings) */
+[[nodiscard]] Stack calc_parse_expression(Stack s, Registers regs, char* string);
+
 [[nodiscard]] bool calc_had_error();
+
+/** Whether q asked to leave the top-level input (main then stops and exits) */
+[[nodiscard]] bool calc_quit_requested();
 
 #endif
 

@@ -76,7 +76,7 @@ Stack register_stack(Registers regs, unsigned char name) {
 
 /**
  * Store a value in a register's array at the given index, replacing the
- * cell if the index already exists (dc's :). The array grows by doubling,
+ * cell if the index already exists (:). The array grows by doubling,
  * with the byte size checked against overflow.
  * @param regs Register file
  * @param name Register name
@@ -103,7 +103,7 @@ void register_array_store(Registers regs, unsigned char name, const mpz_t index,
 }
 
 /**
- * Find the array cell at the given index (dc's ;)
+ * Find the array cell at the given index (;)
  * @param regs Register file
  * @param name Register name
  * @param index Array index to look up
