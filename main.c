@@ -40,8 +40,6 @@ SOFTWARE.
  * TODO: Read a script file
  * TODO: Support arbitrary input/output radices
  * TODO: Support registers
- * TODO: Support strings (execute and print)
- * TODO: Support macros
  * TODO: Support conditionals
  * TODO: Support arbitrary precision for decimal
  */

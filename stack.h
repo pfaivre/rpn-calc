@@ -29,29 +29,58 @@ SOFTWARE.
 
 #include <gmp.h>
 
+/** The kind of a stack value */
+typedef enum ValueKind {
+    VAL_NUM,  /**< arbitrary-precision integer */
+    VAL_STR   /**< string */
+} ValueKind;
+
 /**
- * A stack of arbitrary-precision integers backed by a dynamically growing
- * array: vals[0] is the bottom of the stack, vals[size-1] the top.
+ * A stack value: either an arbitrary-precision integer or a string.
+ * Only the member matching kind is valid.
+ */
+typedef struct Value {
+    ValueKind kind;
+    union {
+        mpz_t num;   /**< integer, when kind == VAL_NUM */
+        char *str;   /**< heap-allocated NUL-terminated string, when kind == VAL_STR */
+    };
+} Value;
+
+/**
+ * A stack of values backed by a dynamically growing array:
+ * vals[0] is the bottom of the stack, vals[size-1] the top.
  */
 typedef struct StructStack {
-    mpz_t *vals;
+    Value *vals;
     size_t size;
     size_t cap;
 } StructStack;
 
 typedef StructStack* Stack;
 
-/** The top element of the stack (only valid when the stack is non-empty) */
-static inline mpz_ptr stack_top(Stack s) { return s->vals[s->size - 1]; }
+/** The top value of the stack (only valid when the stack is non-empty) */
+static inline Value *stack_top(Stack s) { return &s->vals[s->size - 1]; }
 
-/** The element just below the top (only valid with at least two elements) */
-static inline mpz_ptr stack_second(Stack s) { return s->vals[s->size - 2]; }
+/** The value just below the top (only valid with at least two values) */
+static inline Value *stack_second(Stack s) { return &s->vals[s->size - 2]; }
 
 Stack stack_init();
 
-[[nodiscard]] Stack stack_push(Stack, mpz_t);
+/** Release the resources held by a value (mpz_clear or free) */
+void value_clear(Value *v);
 
-[[nodiscard]] Stack stack_pop(Stack, mpz_t*);
+[[nodiscard]] Stack stack_push_num(Stack, const mpz_t);
+
+[[nodiscard]] Stack stack_push_str(Stack, const char *);
+
+/** Push a deep copy of a value of either kind. The value is taken by value
+ * so a caller may safely pass *stack_top(s): the struct copy happens before
+ * the backing array grows, and only the separately-allocated limbs/buffers
+ * are shared with the copy. */
+[[nodiscard]] Stack stack_push_value(Stack, Value);
+
+[[nodiscard]] Stack stack_pop(Stack, Value *);
 
 bool stack_hasAtLeast(Stack, int);
 

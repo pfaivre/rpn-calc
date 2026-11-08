@@ -63,11 +63,13 @@ $ ./rpn
 ```
 
 ## Commands
-`p` Prints the top value of the stack.
+`[...]` Pushes a string literal onto the stack. The outer brackets are not part of the string; inner bracket pairs are kept, so nesting works (`[[a]b]` pushes `[a]b`). Spaces, `#` and digits are allowed inside, and the literal may be written without separating spaces (`2[ab]p`). A literal not closed on the same line is an error.
 
-`n` Pops the top value of the stack and prints it without a trailing newline.
+`p` Prints the top value of the stack. A string is printed as-is.
 
-`P` Pops the top value of the stack and prints it as a string of bytes, most significant byte of its absolute value first, without a trailing newline (so `72 105 256 * + P` prints `iH`). String literals `[...]` are not supported; `P` only works on numbers.
+`n` Pops the top value of the stack and prints it without a trailing newline. A string is printed as-is.
+
+`P` Pops the top value of the stack and prints it without a trailing newline. A string is printed as-is; a number is printed as a string of bytes, most significant byte of its absolute value first (so `72 105 256 * + P` prints `iH`).
 
 `+` Pops two values off the stack, adds them and pushes the result on the stack.
 
@@ -93,6 +95,8 @@ $ ./rpn
 
 `f` Prints the entire stack without modifying it.
 
+`x` If the top value is a string, pops it and executes its contents as commands on the same stack (macros can nest: `[[2 3 + p] x] x` prints `5`). A number is left untouched, not popped.
+
 ## Compatibility with dc
 For the commands listed above, rpn behaves like dc (checked against GNU dc 1.5.2):
 
@@ -112,6 +116,8 @@ For the commands listed above, rpn behaves like dc (checked against GNU dc 1.5.2
   whole stack, top first; `n` pops and prints without a trailing newline and
   `P` pops and prints the number as bytes, most significant byte first.
 - Arbitrary-precision integer arithmetic: results are exact, as in dc.
+- String literals `[...]` (with nested brackets), and printing them with `p`, `n`, `P` and `f`: `p` adds a trailing newline, `n` and `P` pop the value and print without one, `f` prints one value per line, top first. Arithmetic on a string reports `non-numeric value` and leaves the operands on the stack, as in dc.
+- Macro execution with `x`: a string is popped and run as commands on the same stack, macros nest, and `x` on a number leaves the stack untouched.
 - The `-e` option, and reading expressions from standard input without it.
 
 rpn deliberately differs from dc in the following ways:
@@ -122,11 +128,12 @@ rpn deliberately differs from dc in the following ways:
   session still continues after an error in both programs.
 - Integers only: no decimal point, no scale (`k`) and no input/output base
   (`i`, `o`) — input and output are always base 10.
-- No registers, macros, conditionals, loops or strings: an unknown command
-  such as `x` is reported as unimplemented, where dc would treat it as a
-  register or macro operation. `n` and `P` print without a trailing newline
-  as in dc, but `P` only accepts numbers — `[...]` string literals are not
-  supported.
+- No registers, conditionals or loops: an unknown command such as `>a` is
+  reported as unimplemented, where dc would treat it as a register or
+  conditional operation. Strings can be pushed, printed and executed with
+  `x`, but there is no register to store them in and no `q`/`Q` to abort a
+  macro early. A `[...]` literal not closed on the same line is an error,
+  where dc keeps reading the following lines into the string.
 
 - A positive exponent that does not fit in an unsigned long, or whose result
   would exceed 32 MiB, is rejected with `exponent too large in raise`, while

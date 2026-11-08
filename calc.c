@@ -39,6 +39,10 @@ SOFTWARE.
  * exponent is rejected up front with a graceful error instead. */
 #define MAX_POW_BITS ((size_t) 1 << 28)
 
+/* Maximum nesting depth of macro execution (x). A deeper nesting is
+ * rejected with an error instead of overflowing the C stack. */
+#define MAX_MACRO_DEPTH 1000
+
 static bool _calc_errorFlag = false;
 
 /**
@@ -61,6 +65,15 @@ bool calc_had_error() {
 typedef void (*MpzBinop)(mpz_t, const mpz_t, const mpz_t);
 
 /**
+ * Whether the top two values of the stack are both numbers
+ * @param s Stack to inspect
+ * @return true when both the top and the second values are numbers
+ */
+static bool _calc_top_two_numeric(Stack s) {
+    return stack_top(s)->kind == VAL_NUM && stack_second(s)->kind == VAL_NUM;
+}
+
+/**
  * Apply a binary mpz operation to the top two values of the stack
  * @param s Stack to modify
  * @param op The mpz operation to apply (e.g. mpz_add)
@@ -71,10 +84,14 @@ static Stack _calc_binary_op(Stack s, MpzBinop op) {
         _calc_error("stack underflow");
         return s;
     }
-    mpz_t a;
+    if (!_calc_top_two_numeric(s)) {
+        _calc_error("non-numeric value");
+        return s;
+    }
+    Value a;
     s = stack_pop(s, &a);
-    op(stack_top(s), stack_top(s), a);
-    mpz_clear(a);
+    op(stack_top(s)->num, stack_top(s)->num, a.num);
+    value_clear(&a);
     return s;
 }
 
@@ -91,25 +108,72 @@ static Stack _calc_div_op(Stack s, MpzBinop op, const char *err) {
         _calc_error("stack underflow");
         return s;
     }
-    if (mpz_cmp_si(stack_top(s), 0) == 0) {
+    if (!_calc_top_two_numeric(s)) {
+        _calc_error("non-numeric value");
+        return s;
+    }
+    if (mpz_cmp_si(stack_top(s)->num, 0) == 0) {
         _calc_error(err);
         return s;
     }
-    mpz_t a;
+    Value a;
     s = stack_pop(s, &a);
-    op(stack_top(s), stack_top(s), a);
-    mpz_clear(a);
+    op(stack_top(s)->num, stack_top(s)->num, a.num);
+    value_clear(&a);
     return s;
 }
+
+/**
+ * Print a value in decimal: a string as-is, a number in base 10
+ * @param v Value to print
+ * @param newline Whether to append a trailing newline
+ */
+static void _calc_print(const Value *v, bool newline) {
+    if (v->kind == VAL_STR) {
+        fputs(v->str, stdout);
+        if (newline)
+            putchar('\n');
+    } else {
+        mpz_out_str(stdout, 10, v->num);
+        if (newline)
+            puts("");
+    }
+}
+
+/**
+ * Print a number as a string of bytes, most significant byte of its
+ * absolute value first (dc's P); zero prints as a single NUL byte
+ * @param num Number to print
+ */
+static void _calc_print_bytes(const mpz_t num) {
+    mpz_t abs;
+    mpz_init(abs);
+    mpz_abs(abs, num);
+    size_t nbytes = mpz_sizeinbase(abs, 256);  // at least 1, even for zero
+    unsigned char *bytes = malloc(nbytes);
+    if (!bytes)
+        rpn_fatal("memory allocation error");
+    size_t count = 0;
+    mpz_export(bytes, &count, 1, 1, 1, 0, abs);
+    if (count == 0)
+        putchar(0);  // zero prints as a single NUL byte, as in dc
+    else
+        fwrite(bytes, 1, count, stdout);
+    free(bytes);
+    mpz_clear(abs);
+}
+
+static Stack _calc_parse_depth(Stack s, char *string, int depth);
 
 /**
  * Performs a single command
  * @param s Stack to modify
  * @param command A single part of the input (e.g. an operand, an operator or
  * an instruction)
+ * @param depth Current macro nesting depth, forwarded to x
  * @return The top of the stack after performing the command
  */
-static Stack _calc_proceed(Stack s, const char* command) {
+static Stack _calc_proceed(Stack s, const char* command, int depth) {
     // A number
     if (isdigit((unsigned char) command[0]) || command[0] == '_') {
         mpz_t number;
@@ -123,7 +187,7 @@ static Stack _calc_proceed(Stack s, const char* command) {
         else
             mpz_init_set_str(number, command, 10);
 
-        s = stack_push(s, number);
+        s = stack_push_num(s, number);
         mpz_clear(number);
         return s;
     }
@@ -146,24 +210,29 @@ static Stack _calc_proceed(Stack s, const char* command) {
             _calc_error("stack underflow");
             return s;
         }
-        if (mpz_cmp_si(stack_top(s), 0) == 0) {
+        if (!_calc_top_two_numeric(s)) {
+            _calc_error("non-numeric value");
+            return s;
+        }
+        if (mpz_cmp_si(stack_top(s)->num, 0) == 0) {
             _calc_error("divide by zero");
             return s;
         }
-        mpz_t a, b, quotient, remainder;
+        Value a, b;
+        mpz_t quotient, remainder;
         s = stack_pop(s, &a);  // Pop divisor (top of stack)
         s = stack_pop(s, &b);  // Pop dividend (next on stack)
 
         mpz_init(quotient);
         mpz_init(remainder);
-        mpz_tdiv_qr(quotient, remainder, b, a);
+        mpz_tdiv_qr(quotient, remainder, b.num, a.num);
 
         // Push results: quotient first, then remainder
-        s = stack_push(s, quotient);
-        s = stack_push(s, remainder);
+        s = stack_push_num(s, quotient);
+        s = stack_push_num(s, remainder);
 
-        mpz_clear(a);
-        mpz_clear(b);
+        value_clear(&a);
+        value_clear(&b);
         mpz_clear(quotient);
         mpz_clear(remainder);
         return s;
@@ -175,10 +244,14 @@ static Stack _calc_proceed(Stack s, const char* command) {
             _calc_error("stack underflow");
             return s;
         }
+        if (!_calc_top_two_numeric(s)) {
+            _calc_error("non-numeric value");
+            return s;
+        }
         // A positive exponent that does not fit in an unsigned long cannot
         // be computed; reject it before popping so the operands stay on the
         // stack (dc reports "exponent too large in raise")
-        if (mpz_sgn(stack_top(s)) > 0 && !mpz_fits_ulong_p(stack_top(s))) {
+        if (mpz_sgn(stack_top(s)->num) > 0 && !mpz_fits_ulong_p(stack_top(s)->num)) {
             _calc_error("exponent too large in raise");
             return s;
         }
@@ -186,31 +259,31 @@ static Stack _calc_proceed(Stack s, const char* command) {
         // beyond MAX_POW_BITS GMP would attempt a huge allocation and abort
         // on failure. Bases 0 and +-1 are exact for any exponent and stay
         // instant. Checked before popping so the operands stay on the stack.
-        if (mpz_sgn(stack_top(s)) > 0 && mpz_cmpabs_ui(stack_second(s), 1) > 0) {
+        if (mpz_sgn(stack_top(s)->num) > 0 && mpz_cmpabs_ui(stack_second(s)->num, 1) > 0) {
             size_t result_bits;
-            if (ckd_mul(&result_bits, (size_t) mpz_get_ui(stack_top(s)),
-                        mpz_sizeinbase(stack_second(s), 2))
+            if (ckd_mul(&result_bits, (size_t) mpz_get_ui(stack_top(s)->num),
+                        mpz_sizeinbase(stack_second(s)->num, 2))
                 || result_bits > MAX_POW_BITS) {
                 _calc_error("exponent too large in raise");
                 return s;
             }
         }
-        mpz_t a;
+        Value a;
         s = stack_pop(s, &a);
-        if (mpz_sgn(a) < 0) {
+        if (mpz_sgn(a.num) < 0) {
             // Negative exponent
             // at the default scale 0 that is the truncation toward zero of
             // the rational result, i.e. 0 unless the base is 1 or _1
-            if (mpz_cmp_si(stack_top(s), 1) == 0)
-                mpz_set_ui(stack_top(s), 1);
-            else if (mpz_cmp_si(stack_top(s), -1) == 0)
-                mpz_set_si(stack_top(s), mpz_odd_p(a) ? -1 : 1);
+            if (mpz_cmp_si(stack_top(s)->num, 1) == 0)
+                mpz_set_ui(stack_top(s)->num, 1);
+            else if (mpz_cmp_si(stack_top(s)->num, -1) == 0)
+                mpz_set_si(stack_top(s)->num, mpz_odd_p(a.num) ? -1 : 1);
             else
-                mpz_set_ui(stack_top(s), 0);
+                mpz_set_ui(stack_top(s)->num, 0);
         } else {
-            mpz_pow_ui(stack_top(s), stack_top(s), mpz_get_ui(a));
+            mpz_pow_ui(stack_top(s)->num, stack_top(s)->num, mpz_get_ui(a.num));
         }
-        mpz_clear(a);
+        value_clear(&a);
         return s;
     }
 
@@ -220,11 +293,15 @@ static Stack _calc_proceed(Stack s, const char* command) {
             _calc_error("stack underflow");
             return s;
         }
-        if (mpz_sgn(stack_top(s)) < 0) {
+        if (stack_top(s)->kind != VAL_NUM) {
+            _calc_error("non-numeric value");
+            return s;
+        }
+        if (mpz_sgn(stack_top(s)->num) < 0) {
             _calc_error("square root of negative number");
             return s;
         }
-        mpz_root(stack_top(s), stack_top(s), 2);
+        mpz_root(stack_top(s)->num, stack_top(s)->num, 2);
         return s;
     }
 
@@ -232,14 +309,13 @@ static Stack _calc_proceed(Stack s, const char* command) {
     if (strcmp(command, "c") == 0)
         return stack_clear(s);
 
-    // Print the top value
+    // Print the top value (a string is printed as-is)
     if (strcmp(command, "p") == 0) {
         if (!stack_hasAtLeast(s, 1)) {
             _calc_error("stack underflow");
             return s;
         }
-        mpz_out_str(stdout, 10, stack_top(s));
-        puts("");
+        _calc_print(stack_top(s), true);
         return s;
     }
 
@@ -249,45 +325,35 @@ static Stack _calc_proceed(Stack s, const char* command) {
             _calc_error("stack underflow");
             return s;
         }
-        mpz_out_str(stdout, 10, stack_top(s));
-        mpz_t a;
+        Value a;
         s = stack_pop(s, &a);
-        mpz_clear(a);
+        _calc_print(&a, false);
+        value_clear(&a);
         return s;
     }
 
-    // Pop the top value and print it as a string of bytes, most significant
-    // byte of its absolute value first, without a trailing newline (dc's P
-    // on a number; string literals are not supported)
+    // Pop the top value and print it without a trailing newline: a string
+    // is printed as-is, a number as a string of bytes, most significant
+    // byte of its absolute value first (dc's P)
     if (strcmp(command, "P") == 0) {
         if (!stack_hasAtLeast(s, 1)) {
             _calc_error("stack underflow");
             return s;
         }
-        mpz_t a;
+        Value a;
         s = stack_pop(s, &a);
-        mpz_abs(a, a);
-        size_t nbytes = mpz_sizeinbase(a, 256);  // at least 1, even for zero
-        unsigned char *bytes = malloc(nbytes);
-        if (!bytes)
-            rpn_fatal("memory allocation error");
-        size_t count = 0;
-        mpz_export(bytes, &count, 1, 1, 1, 0, a);
-        if (count == 0)
-            putchar(0);  // zero prints as a single NUL byte, as in dc
+        if (a.kind == VAL_STR)
+            fputs(a.str, stdout);
         else
-            fwrite(bytes, 1, count, stdout);
-        free(bytes);
-        mpz_clear(a);
+            _calc_print_bytes(a.num);
+        value_clear(&a);
         return s;
     }
 
     // Print all the stack
     if (strcmp(command, "f") == 0) {
-        for (size_t i = s->size; i-- > 0; ) {
-            mpz_out_str(stdout, 10, s->vals[i]);
-            puts("");
-        }
+        for (size_t i = s->size; i-- > 0; )
+            _calc_print(&s->vals[i], true);
         return s;
     }
 
@@ -297,7 +363,7 @@ static Stack _calc_proceed(Stack s, const char* command) {
             _calc_error("stack underflow");
             return s;
         }
-        return stack_push(s, stack_top(s));
+        return stack_push_value(s, *stack_top(s));
     }
 
     // Swap the top two values of the stack (a no-op with fewer than two
@@ -305,7 +371,32 @@ static Stack _calc_proceed(Stack s, const char* command) {
     if (strcmp(command, "r") == 0) {
         if (!stack_hasAtLeast(s, 2))
             return s;
-        mpz_swap(stack_top(s), stack_second(s));
+        Value tmp = *stack_top(s);
+        *stack_top(s) = *stack_second(s);
+        *stack_second(s) = tmp;
+        return s;
+    }
+
+    // Execute the top value as a macro (dc's x): a string is popped and its
+    // contents are run as commands on the same stack, so macros can nest.
+    // A number is left untouched, as in dc. Nesting is depth-limited so a
+    // self-re-executing macro (e.g. [[dx]x]dx) errors out instead of
+    // overflowing the C stack.
+    if (strcmp(command, "x") == 0) {
+        if (!stack_hasAtLeast(s, 1)) {
+            _calc_error("stack underflow");
+            return s;
+        }
+        if (stack_top(s)->kind == VAL_STR) {
+            if (depth >= MAX_MACRO_DEPTH) {
+                _calc_error("macro nesting too deep");
+                return s;
+            }
+            Value a;
+            s = stack_pop(s, &a);
+            s = _calc_parse_depth(s, a.str, depth + 1);
+            value_clear(&a);
+        }
         return s;
     }
 
@@ -328,27 +419,65 @@ static bool _calc_tokenThreshold(char c1, char c2) {
 
 /**
  * Find the first command on the string
- * @param token An allocated string to store the token
+ * @param token An allocated string to store the token (a string literal is
+ * stored without its outer brackets)
  * @param str String to search the element on (operator, operand or command)
- * @return Pointer to str after the extracted token
+ * @param is_string Set to true when the token is a [...] string literal
+ * @return Pointer to str after the extracted token, or NULL at end of input
+ * or on an unterminated string literal
  */
-static char *_calc_firstToken(char *token, char *str) {
-    int i = 0;
+static char *_calc_firstToken(char *token, char *str, bool *is_string) {
+    size_t i = 0;
+
+    *is_string = false;
 
     if (!token)
         return NULL;
 
     // End of input: clear the token so the caller's loop stops
-    if (!str || *str == '\0') {
+    if (!str) {
         token[0] = '\0';
         return NULL;
     }
 
-    token[i] = '\0';
-
     // Ignore leading spaces, tabs and new lines
     while (*str == ' ' || *str == '\t' || *str == '\n')
         str++;
+
+    if (*str == '\0') {
+        token[0] = '\0';
+        return NULL;
+    }
+
+    // String literal: copy everything up to the matching ']', keeping inner
+    // bracket pairs (dc allows nesting: [[a]b] is the string "[a]b")
+    if (*str == '[') {
+        int depth = 1;
+        char *p = str + 1;
+
+        token[0] = '\0';
+        while (*p != '\0') {
+            if (*p == ']') {
+                if (--depth == 0) {
+                    p++;
+                    break;
+                }
+            } else if (*p == '[') {
+                depth++;
+            }
+            token[i++] = *p++;
+            token[i] = '\0';
+        }
+        if (depth != 0) {
+            _calc_error("unterminated string");
+            token[0] = '\0';
+            return NULL;
+        }
+        *is_string = true;
+        return p;
+    }
+
+    token[i] = '\0';
 
     // Copy token chars until the next one or end of string
     while (*str != ' ' && *str != '\t' && *str != '\n' && *str != '\0') {
@@ -364,12 +493,13 @@ static char *_calc_firstToken(char *token, char *str) {
 }
 
 /**
- * Performs a set of commands (e.g. "2 3*p")
+ * Performs a set of commands (e.g. "2 3*p") at a given macro nesting depth
  * @param s Stack to modify
  * @param string Commands to execute
+ * @param depth Current macro nesting depth (0 for top-level input)
  * @return The top of the stack after performing the commands
  */
-Stack calc_parse(Stack s, char* string) {
+static Stack _calc_parse_depth(Stack s, char* string, int depth) {
     char *ptr = string;
     size_t tokcap;
     if (ckd_add(&tokcap, strlen(string), (size_t) 1))
@@ -379,18 +509,32 @@ Stack calc_parse(Stack s, char* string) {
     if (!token)
         rpn_fatal("memory allocation error");
 
-    ptr = _calc_firstToken(token, ptr);
+    bool is_string;
+    while ((ptr = _calc_firstToken(token, ptr, &is_string)) != NULL) {
+        // A [...] string literal is pushed as-is, even when empty or
+        // starting with '#'
+        if (is_string) {
+            s = stack_push_str(s, token);
+            continue;
+        }
 
-    while (token[0] != '\0') {
         // Comment
         if (token[0] == '#')
             break;
 
-        s = _calc_proceed(s, token);
-
-        ptr = _calc_firstToken(token, ptr);
+        s = _calc_proceed(s, token, depth);
     }
 
     free(token);
     return s;
+}
+
+/**
+ * Performs a set of commands (e.g. "2 3*p")
+ * @param s Stack to modify
+ * @param string Commands to execute
+ * @return The top of the stack after performing the commands
+ */
+Stack calc_parse(Stack s, char* string) {
+    return _calc_parse_depth(s, string, 0);
 }
