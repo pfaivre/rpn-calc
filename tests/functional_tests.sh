@@ -1027,6 +1027,8 @@ test_lines $'2 p\n2\n1'  '[? 1 Q 9 p] x 1 p\n2 p\n'   # 1 Q unwinds the macro on
 test_lines $'q\n1'  '[?] x 1 p\nq\n'                  # q in the ?-line unwinds two levels
 test_lines "1"  '1 p ? 2 p\n'                       # EOF on ?: exits silently
 test_lines ""  '?\n'                                # bare ? at EOF
+test_lines ""  '[[?]x 8 p]x 9 p\n'                # EOF inside nested ?: unwinds all levels, 9 p never runs
+test_lines "1"  '1 p [[?]x]x 9 p\n'                # EOF inside nested ?: only output before EOF is printed
 
 # ? works in -e mode too (reads the remaining stdin)
 tests_run=$((tests_run + 1))

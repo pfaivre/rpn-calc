@@ -29,6 +29,9 @@ SOFTWARE.
 
 char *read_line(void);
 
+/** Whether the standard input is a terminal (which already echoes input) */
+bool stdin_is_tty(void);
+
 void printUsage(const char *progName);
 
 void printVersion(const char *version, const char *copyright);
