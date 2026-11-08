@@ -39,6 +39,10 @@ SOFTWARE.
  * exponent is rejected up front with a graceful error instead. */
 #define MAX_POW_BITS ((size_t) 1 << 28)
 
+/* Maximum nesting depth of macro execution (x). A deeper nesting is
+ * rejected with an error instead of overflowing the C stack. */
+#define MAX_MACRO_DEPTH 1000
+
 static bool _calc_errorFlag = false;
 
 /**
@@ -119,14 +123,17 @@ static Stack _calc_div_op(Stack s, MpzBinop op, const char *err) {
     return s;
 }
 
+static Stack _calc_parse_depth(Stack s, char *string, int depth);
+
 /**
  * Performs a single command
  * @param s Stack to modify
  * @param command A single part of the input (e.g. an operand, an operator or
  * an instruction)
+ * @param depth Current macro nesting depth, forwarded to x
  * @return The top of the stack after performing the command
  */
-static Stack _calc_proceed(Stack s, const char* command) {
+static Stack _calc_proceed(Stack s, const char* command, int depth) {
     // A number
     if (isdigit((unsigned char) command[0]) || command[0] == '_') {
         mpz_t number;
@@ -359,16 +366,22 @@ static Stack _calc_proceed(Stack s, const char* command) {
 
     // Execute the top value as a macro (dc's x): a string is popped and its
     // contents are run as commands on the same stack, so macros can nest.
-    // A number is left untouched, as in dc.
+    // A number is left untouched, as in dc. Nesting is depth-limited so a
+    // self-re-executing macro (e.g. [[dx]x]dx) errors out instead of
+    // overflowing the C stack.
     if (strcmp(command, "x") == 0) {
         if (!stack_hasAtLeast(s, 1)) {
             _calc_error("stack underflow");
             return s;
         }
         if (stack_top(s)->kind == VAL_STR) {
+            if (depth >= MAX_MACRO_DEPTH) {
+                _calc_error("macro nesting too deep");
+                return s;
+            }
             Value a;
             s = stack_pop(s, &a);
-            s = calc_parse(s, a.str);
+            s = _calc_parse_depth(s, a.str, depth + 1);
             value_clear(&a);
         }
         return s;
@@ -467,12 +480,13 @@ static char *_calc_firstToken(char *token, char *str, bool *is_string) {
 }
 
 /**
- * Performs a set of commands (e.g. "2 3*p")
+ * Performs a set of commands (e.g. "2 3*p") at a given macro nesting depth
  * @param s Stack to modify
  * @param string Commands to execute
+ * @param depth Current macro nesting depth (0 for top-level input)
  * @return The top of the stack after performing the commands
  */
-Stack calc_parse(Stack s, char* string) {
+static Stack _calc_parse_depth(Stack s, char* string, int depth) {
     char *ptr = string;
     size_t tokcap;
     if (ckd_add(&tokcap, strlen(string), (size_t) 1))
@@ -495,9 +509,19 @@ Stack calc_parse(Stack s, char* string) {
         if (token[0] == '#')
             break;
 
-        s = _calc_proceed(s, token);
+        s = _calc_proceed(s, token, depth);
     }
 
     free(token);
     return s;
+}
+
+/**
+ * Performs a set of commands (e.g. "2 3*p")
+ * @param s Stack to modify
+ * @param string Commands to execute
+ * @return The top of the stack after performing the commands
+ */
+Stack calc_parse(Stack s, char* string) {
+    return _calc_parse_depth(s, string, 0);
 }

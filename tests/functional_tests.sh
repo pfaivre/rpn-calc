@@ -567,6 +567,16 @@ test "[1p]x"  "1"
 # Macros work with -e too
 test_e "3" -e "[1 2 + p] x"
 
+# Nesting is depth-limited: a self-re-executing macro errors out cleanly
+# instead of overflowing the C stack (regression test for a SIGSEGV)
+test_error "[[dx]x]dx"  "macro nesting too deep"
+test_exit 1 -e "[[dx]x]dx"
+
+# Deep but bounded nesting still executes
+deep="1p"
+for _ in $(seq 1 50); do deep="[${deep}]x"; done
+test "$deep"  "1"
+
 # ===== SUMMARY =====
 
 if [ "$failures" -eq 0 ]; then
