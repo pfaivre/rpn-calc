@@ -38,6 +38,10 @@ SOFTWARE.
  * with a graceful error instead. */
 #define MAX_POW_BITS ((size_t) 1 << 28)
 
+/* Largest exponent e for which 10^e stays within MAX_POW_BITS bits
+ * (e * log2(10) <= MAX_POW_BITS). 334/100 > log2(10), so this is conservative. */
+#define MAX_POW10_EXP ((long) ((MAX_POW_BITS * 100) / 334))
+
 /** Set out to the number (num, scale), copying num */
 static void number_set(Value *out, const mpz_t num, long scale) {
     out->kind = VAL_NUM;
@@ -331,6 +335,57 @@ const char *number_divmod(const Value *a, const Value *b, long k, Value *q, Valu
     return NULL;
 }
 
+/** true when base's value is +-1, i.e. |num| == 10^scale */
+static bool is_unit_base(const Value *base) {
+    mpz_t ten;
+    mpz_init(ten);
+    pow10(ten, base->scale);
+    bool unit = mpz_cmpabs(base->num, ten) == 0;
+    mpz_clear(ten);
+    return unit;
+}
+
+/** rn = the value +-1 of base^e represented at scale s: +-10^s */
+static void unit_at_scale(mpz_t rn, const Value *base, const mpz_t e, long s) {
+    mpz_set_si(rn, (mpz_sgn(base->num) < 0 && mpz_odd_p(e)) ? -1 : 1);
+    mpz_t p;
+    mpz_init(p);
+    pow10(p, s);
+    mpz_mul(rn, rn, p);
+    mpz_clear(p);
+}
+
+/** Exponent size guard: e (already positive) must fit an unsigned long and
+ * n * bits(num) must stay within MAX_POW_BITS, so |num|^n is computable.
+ * On success sets *n and returns NULL; otherwise returns the error. */
+static const char *pow_exp_guard(const mpz_t e, const mpz_t num, unsigned long *n) {
+    if (!mpz_fits_ulong_p(e))
+        return "exponent too large in raise";
+    *n = mpz_get_ui(e);
+    size_t bits;
+    if (ckd_mul(&bits, (size_t) *n, mpz_sizeinbase(num, 2)) || bits > MAX_POW_BITS)
+        return "exponent too large in raise";
+    return NULL;
+}
+
+/** rn = trunc(x / 10^shift), shift >= 0, with a zero fast-path when x < 10^shift.
+ * bits(x) <= shift*log2(10) implies x < 10^shift; 332/100 < log2(10), safe. */
+static void trunc_div_pow10(mpz_t rn, const mpz_t x, long shift) {
+    if (shift == 0) {
+        mpz_set(rn, x);
+        return;
+    }
+    if (mpz_sizeinbase(x, 2) <= (size_t) shift * 332 / 100) {
+        mpz_set_ui(rn, 0);
+        return;
+    }
+    mpz_t p;
+    mpz_init(p);
+    pow10(p, shift);
+    mpz_tdiv_q(rn, x, p);
+    mpz_clear(p);
+}
+
 const char *number_pow(const Value *base, const Value *exp, long k, Value *out) {
     const char *err = NULL;
     mpz_t e, rn;
@@ -343,110 +398,72 @@ const char *number_pow(const Value *base, const Value *exp, long k, Value *out) 
         mpz_set_ui(rn, 1);
         number_set(out, rn, 0);
     } else if (mpz_sgn(e) < 0) {
-        // Negative exponent: result scale k, value 10^(k+sa*n) / |na|^n
-        // truncated, with the sign of the base for odd n. Bases 0 and +-1
-        // are exact for any exponent and stay instant.
-        mpz_t ten;
-        mpz_init(ten);
-        pow10(ten, sa);
-        bool unit = mpz_cmpabs(base->num, ten) == 0;  // base value is +-1
-        mpz_clear(ten);
-        if (unit) {
-            mpz_abs(e, e);
-            mpz_set_si(rn, (mpz_sgn(base->num) < 0 && mpz_odd_p(e)) ? -1 : 1);
-            mpz_t p;
-            mpz_init(p);
-            pow10(p, k);
-            mpz_mul(rn, rn, p);  // the value +-1 at scale k is +-10^k
-            mpz_clear(p);
+        // Negative exponent n: result at scale k, value trunc(10^(k+sa*n) / |num|^n),
+        // with the sign of the base for odd n. Bases 0 and +-1 are exact for any
+        // exponent and stay instant.
+        if (is_unit_base(base)) {
+            unit_at_scale(rn, base, e, k);
             number_set(out, rn, k);
         } else if (mpz_sgn(base->num) == 0) {
             mpz_set_ui(rn, 0);
             number_set(out, rn, k);
         } else {
             mpz_abs(e, e);
-            if (!mpz_fits_ulong_p(e)) {
-                err = "exponent too large in raise";
-            } else {
-                unsigned long n = mpz_get_ui(e);
-                mpz_t apow, p;
-                mpz_init(apow);
-                mpz_init(p);
-                size_t bits;
-                long e2;
-                if (ckd_mul(&bits, (size_t) n, mpz_sizeinbase(base->num, 2))
-                    || bits > MAX_POW_BITS)
+            unsigned long n;
+            err = pow_exp_guard(e, base->num, &n);
+            if (!err) {
+                // e2 = sa*n + k bounds the 10^e2 numerator; cap it so pow10 stays
+                // within MAX_POW_BITS bits instead of risking a huge allocation
+                long e2 = 0;
+                if (ckd_mul(&e2, sa, (long) n) || ckd_add(&e2, e2, k) || e2 > MAX_POW10_EXP)
                     err = "exponent too large in raise";
                 else {
+                    mpz_t apow, p;
+                    mpz_init(apow);
+                    mpz_init(p);
                     mpz_abs(apow, base->num);
                     mpz_pow_ui(apow, apow, n);
-                    if (ckd_mul(&e2, sa, (long) n) || ckd_add(&e2, e2, k))
-                        mpz_set_ui(rn, 0);  // 10^e2 is astronomically larger than apow
-                    else if (mpz_sizeinbase(apow, 2) > (size_t) e2 * 332 / 100)
-                        mpz_set_ui(rn, 0);  // apow is larger than 10^e2: quotient 0
-                    else {
-                        pow10(p, e2);
-                        mpz_tdiv_q(rn, p, apow);
-                    }
+                    pow10(p, e2);
+                    mpz_tdiv_q(rn, p, apow);
                     if (mpz_sgn(base->num) < 0 && (n & 1))
                         mpz_neg(rn, rn);
+                    mpz_clear(apow);
+                    mpz_clear(p);
                 }
-                mpz_clear(apow);
-                mpz_clear(p);
             }
             if (!err)
                 number_set(out, rn, k);
         }
     } else {
-        // Positive exponent n: result scale min(sa*n, max(sa, k)). Bases of
-        // value 0 or +-1 are exact for any exponent and stay instant.
+        // Positive exponent n: result scale min(sa*n, max(sa, k)). Bases of value
+        // 0 or +-1 are exact for any exponent and stay instant.
         long cap = sa > k ? sa : k;
-        mpz_t ten;
-        mpz_init(ten);
-        pow10(ten, sa);
-        bool unit = mpz_cmpabs(base->num, ten) == 0;  // base value is +-1
-        mpz_clear(ten);
-        long sa_n = 0;
-        bool big = !mpz_fits_ulong_p(e) || ckd_mul(&sa_n, sa, (long) mpz_get_ui(e));
-        long rs = big ? cap : (sa_n < cap ? sa_n : cap);  // min(sa*n, cap)
-        if (unit || mpz_sgn(base->num) == 0) {
-            if (unit) {
-                mpz_set_si(rn, (mpz_sgn(base->num) < 0 && mpz_odd_p(e)) ? -1 : 1);
-                mpz_t p;
-                mpz_init(p);
-                pow10(p, rs);
-                mpz_mul(rn, rn, p);  // the value +-1 at scale rs is +-10^rs
-                mpz_clear(p);
-            } else {
+        if (is_unit_base(base) || mpz_sgn(base->num) == 0) {
+            long sa_n = 0;
+            bool big = !mpz_fits_ulong_p(e) || ckd_mul(&sa_n, sa, (long) mpz_get_ui(e));
+            long rs = big ? cap : (sa_n < cap ? sa_n : cap);  // min(sa*n, cap)
+            if (mpz_sgn(base->num) == 0)
                 mpz_set_ui(rn, 0);
-            }
+            else
+                unit_at_scale(rn, base, e, rs);
             number_set(out, rn, rs);
-        } else if (big) {
-            err = "exponent too large in raise";
         } else {
-            unsigned long n = mpz_get_ui(e);
-            size_t bits;
-            if (ckd_mul(&bits, (size_t) n, mpz_sizeinbase(base->num, 2))
-                || bits > MAX_POW_BITS) {
+            long sa_n = 0;
+            bool big = !mpz_fits_ulong_p(e) || ckd_mul(&sa_n, sa, (long) mpz_get_ui(e));
+            long rs = big ? cap : (sa_n < cap ? sa_n : cap);  // min(sa*n, cap)
+            if (big)
                 err = "exponent too large in raise";
-            } else {
-                mpz_t full, p;
-                mpz_init(full);
-                mpz_init(p);
-                mpz_pow_ui(full, base->num, n);
-                long shift = sa_n - rs;  // >= 0
-                if (shift == 0)
-                    mpz_set(rn, full);
-                else if (mpz_sizeinbase(full, 2) <= (size_t) shift * 332 / 100)
-                    mpz_set_ui(rn, 0);  // full is smaller than 10^shift
-                else {
-                    pow10(p, shift);
-                    mpz_tdiv_q(rn, full, p);
-                }
-                mpz_clear(full);
-                mpz_clear(p);
-                if (!err)
+            else {
+                unsigned long n;
+                err = pow_exp_guard(e, base->num, &n);
+                if (!err) {
+                    mpz_t full;
+                    mpz_init(full);
+                    mpz_pow_ui(full, base->num, n);
+                    trunc_div_pow10(rn, full, sa_n - rs);  // shift >= 0
+                    mpz_clear(full);
                     number_set(out, rn, rs);
+                }
             }
         }
     }
@@ -472,4 +489,21 @@ const char *number_sqrt(const Value *a, long k, Value *out) {
     mpz_clear(t);
     mpz_clear(rn);
     return NULL;
+}
+
+const char *number_scale_of(const Value *v, long *out) {
+    if (v->kind != VAL_NUM)
+        return "scale must be a nonnegative number";
+    mpz_t ip;
+    mpz_init(ip);
+    number_int_part(v, ip);
+    const char *err = NULL;
+    if (mpz_sgn(ip) < 0)
+        err = "scale must be a nonnegative number";
+    else if (!mpz_fits_slong_p(ip) || mpz_get_si(ip) > MAX_SCALE)
+        err = "scale too large";
+    else
+        *out = mpz_get_si(ip);
+    mpz_clear(ip);
+    return err;
 }

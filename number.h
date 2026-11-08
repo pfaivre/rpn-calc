@@ -75,6 +75,15 @@ int number_cmp(const Value *a, const Value *b);
  */
 void number_int_part(const Value *v, mpz_t out);
 
+/**
+ * The scale factor from a value (its integer part), for the k command: must be
+ * a nonnegative number not exceeding MAX_SCALE
+ * @param v The value to read the scale from
+ * @param out The scale factor, set on success
+ * @return NULL on success, or an error message ("out untouched on error")
+ */
+const char *number_scale_of(const Value *v, long *out);
+
 /* Arithmetic on numbers. Each writes a fresh number value to out and returns
  * NULL on success or an error message. k is the current scale factor.
  * out is left untouched on error. */

@@ -30,3 +30,4 @@ valgrind: $(PGM)
 test: $(PGM)
 		bash ./tests/functional_tests.sh
 		bash ./tests/adversarial_tests.sh
+		bash ./tests/dc_compliance_tests.sh

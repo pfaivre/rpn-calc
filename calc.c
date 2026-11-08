@@ -155,13 +155,32 @@ static void _calc_print(const Value *v, bool newline) {
 static Stack _calc_parse_depth(Stack s, Registers regs, char *string, int depth);
 
 /**
- * Whether a value is usable as an array index: a nonnegative number (its
- * integer part is the index, so 1.5 indexes cell 1)
- * @param v Value to inspect
- * @return true when v is a number whose value is >= 0
+ * Set idx to the integer part of a number value. idx must already be
+ * initialized by the caller (which also clears it on every path)
+ * @param v Value to convert
+ * @param idx Output mpz, already initialized
+ * @return true when v is a number; false otherwise
  */
-static bool _calc_is_index(const Value *v) {
-    return v->kind == VAL_NUM && mpz_sgn(v->num) >= 0;
+static bool _calc_int_part_into(const Value *v, mpz_t idx) {
+    if (v->kind != VAL_NUM)
+        return false;
+    number_int_part(v, idx);
+    return true;
+}
+
+/**
+ * Whether a value is usable as an array index — a nonnegative number (its
+ * integer part is the index, so 1.5 indexes cell 1, but _0.5 is rejected
+ * because its value is negative) — and set idx to that integer part.
+ * idx must already be initialized by the caller
+ * @param v Value to inspect
+ * @param idx Output mpz, already initialized, set on success
+ * @return true when v is a nonnegative number; false otherwise
+ */
+static bool _calc_index_mpz(const Value *v, mpz_t idx) {
+    if (!_calc_int_part_into(v, idx))
+        return false;
+    return mpz_sgn(v->num) >= 0;
 }
 
 /**
@@ -236,16 +255,16 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
                 _calc_error("stack underflow");
                 return s;
             }
-            if (!_calc_is_index(stack_top(s))) {
+            mpz_t idx;
+            mpz_init(idx);
+            if (!_calc_index_mpz(stack_top(s), idx)) {
                 _calc_error("array index must be a nonnegative integer");
+                mpz_clear(idx);
                 return s;
             }
             Value index, val;
             s = stack_pop(s, &index);  // Pop the index (top of stack)
             s = stack_pop(s, &val);    // Pop the value
-            mpz_t idx;
-            mpz_init(idx);
-            number_int_part(&index, idx);  // the index is the integer part
             register_array_store(regs, name, idx, val);  // moves val
             mpz_clear(idx);
             value_clear(&index);
@@ -258,15 +277,15 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
                 _calc_error("stack underflow");
                 return s;
             }
-            if (!_calc_is_index(stack_top(s))) {
+            mpz_t idx;
+            mpz_init(idx);
+            if (!_calc_index_mpz(stack_top(s), idx)) {
                 _calc_error("array index must be a nonnegative integer");
+                mpz_clear(idx);
                 return s;
             }
             Value index;
             s = stack_pop(s, &index);
-            mpz_t idx;
-            mpz_init(idx);
-            number_int_part(&index, idx);  // the index is the integer part
             const Value *cell = register_array_find(regs, name, idx);
             mpz_clear(idx);
             if (cell)
@@ -457,20 +476,13 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
             _calc_error("stack underflow");
             return s;
         }
-        if (stack_top(s)->kind != VAL_NUM) {
-            _calc_error("scale must be a nonnegative number");
+        long ns;
+        const char *err = number_scale_of(stack_top(s), &ns);
+        if (err) {
+            _calc_error(err);
             return s;
         }
-        mpz_t ip;
-        mpz_init(ip);
-        number_int_part(stack_top(s), ip);
-        if (mpz_sgn(ip) < 0 || !mpz_fits_slong_p(ip) || mpz_get_si(ip) > MAX_SCALE) {
-            _calc_error(mpz_sgn(ip) < 0 ? "scale must be a nonnegative number" : "scale too large");
-            mpz_clear(ip);
-            return s;
-        }
-        _calc_scale = mpz_get_si(ip);
-        mpz_clear(ip);
+        _calc_scale = ns;
         Value a;
         s = stack_pop(s, &a);
         value_clear(&a);
@@ -583,20 +595,15 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
     // Q: pop a count N and quit N levels of macro execution; it never exits
     // the program. An over-depth count is an error (popped) but still quits
     // the available levels, min(N, depth). The count is the integer part of
-    // the top value.
+    // the top value, which must be >= 0.
     if (strcmp(command, "Q") == 0) {
         if (!stack_hasAtLeast(s, 1)) {
             _calc_error("stack underflow");
             return s;
         }
-        if (stack_top(s)->kind != VAL_NUM || mpz_sgn(stack_top(s)->num) < 0) {
-            _calc_error("Q command requires a number >= 0");
-            return s;
-        }
         mpz_t ip;
         mpz_init(ip);
-        number_int_part(stack_top(s), ip);
-        if (!mpz_fits_slong_p(ip)) {
+        if (!_calc_int_part_into(stack_top(s), ip) || mpz_sgn(ip) < 0 || !mpz_fits_slong_p(ip)) {
             _calc_error("Q command requires a number >= 0");
             mpz_clear(ip);
             return s;

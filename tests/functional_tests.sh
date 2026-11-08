@@ -805,6 +805,10 @@ test "2 k 5 3.0 ~ f"  $'.020\n1.66'
 test "2 k 5 3 ~ f"  $'.02\n1.66'
 test_error "2 k 5 0 %"  "remainder by zero"
 test_error_stack "2 k 10 0 ~ f"  $'0\n10'  "divide by zero"
+# % and ~ error with the operands kept when the remainder scale max(sa, sb+k)
+# exceeds MAX_SCALE
+test_error_stack "1000000 k 3.0 1.0 % f"  $'1.0\n3.0'  "scale too large"
+test_error_stack "1000000 k 3.0 1.0 ~ f"  $'1.0\n3.0'  "scale too large"
 
 # + and -: result scale max(sa, sb); *: min(sa+sb, max(sa, sb, k))
 test "1.5 2.25 + p"  "3.75"
@@ -832,6 +836,19 @@ test "2 k 1.5 _1 ^ p"  ".66"
 test "1 k _1.5 _1 ^ p"  "-.6"
 test "0 k 0.0 5 ^ p"  "0"
 test_error_stack "2 99999999999999999999 ^ f"  $'99999999999999999999\n2'  "exponent too large in raise"
+
+# Negative exponent at scale k is the exact truncation of 10^(k+sa*n)/|num|^n
+# (regression: a too-small bit-length heuristic used to print 0 where the exact
+# result is >= 1, e.g. 2 33 ^ _1 at k=10)
+test "10 k 2 33 ^ _1 ^ p"  ".0000000001"
+test "20 k 2 66 ^ _1 ^ p"  ".00000000000000000001"
+# A fractional exponent is truncated to its integer part
+test "2 k 2 2.9 ^ p"  "4"
+# A negative exponent whose 10^(k+sa*n) numerator would exceed the result-size
+# cap is rejected with the operands kept (regression: used to allocate
+# unboundedly and abort GMP from a short input)
+test_error "1000000 k 1 10 1000000 ^ / _268435456 ^"  "exponent too large in raise"
+test_error "0.5 _81000000 ^"  "exponent too large in raise"
 
 # v: square root at scale max(sa, k)
 test "0 k 2 v p"  "1"

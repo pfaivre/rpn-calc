@@ -75,6 +75,13 @@ expect_err "10 67108865 ^" "exponent too large in raise"
 # Exactly at the 32 MiB cap is allowed, then cleared
 expect_ok "2 134217728 ^ c"
 
+# ===== Negative-exponent allocation bomb (regression) =====
+# The 10^(k+sa*n) numerator must be size-capped like the positive branch;
+# these used to make GMP abort on a huge allocation (SIGABRT) from a short
+# input, and now error gracefully with exit 1.
+expect_err "1000000 k 1 10 1000000 ^ / _268435456 ^" "exponent too large in raise"
+expect_err "0.5 _81000000 ^" "exponent too large in raise"
+
 # ===== Non-numeric operands on every numeric command =====
 expect_err "[s] 0 /" "non-numeric value"
 expect_err "0 [s] /" "non-numeric value"
@@ -90,6 +97,9 @@ expect_err "[abc" "unterminated string"
 expect_ok "[] f"
 expect_err "$(printf 'a%.0s' $(seq 1 100000))" "unimplemented"  # 100 KB token
 expect_ok "$(printf '9%.0s' $(seq 1 100000)) 1 + p"               # 100k-digit number
+# A literal with more than MAX_SCALE (1,000,000) fractional digits is rejected
+expect_err "0.$(printf '%1000001s' '' | tr ' ' '0') p" "scale too large"
+expect_ok "0.$(printf '%1000000s' '' | tr ' ' '0') c"             # exactly MAX_SCALE is ok
 
 # ===== P byte-export path =====
 expect_ok "0 P"
