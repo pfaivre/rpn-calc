@@ -123,6 +123,46 @@ static Stack _calc_div_op(Stack s, MpzBinop op, const char *err) {
     return s;
 }
 
+/**
+ * Print a value in decimal: a string as-is, a number in base 10
+ * @param v Value to print
+ * @param newline Whether to append a trailing newline
+ */
+static void _calc_print(const Value *v, bool newline) {
+    if (v->kind == VAL_STR) {
+        fputs(v->str, stdout);
+        if (newline)
+            putchar('\n');
+    } else {
+        mpz_out_str(stdout, 10, v->num);
+        if (newline)
+            puts("");
+    }
+}
+
+/**
+ * Print a number as a string of bytes, most significant byte of its
+ * absolute value first (dc's P); zero prints as a single NUL byte
+ * @param num Number to print
+ */
+static void _calc_print_bytes(const mpz_t num) {
+    mpz_t abs;
+    mpz_init(abs);
+    mpz_abs(abs, num);
+    size_t nbytes = mpz_sizeinbase(abs, 256);  // at least 1, even for zero
+    unsigned char *bytes = malloc(nbytes);
+    if (!bytes)
+        rpn_fatal("memory allocation error");
+    size_t count = 0;
+    mpz_export(bytes, &count, 1, 1, 1, 0, abs);
+    if (count == 0)
+        putchar(0);  // zero prints as a single NUL byte, as in dc
+    else
+        fwrite(bytes, 1, count, stdout);
+    free(bytes);
+    mpz_clear(abs);
+}
+
 static Stack _calc_parse_depth(Stack s, char *string, int depth);
 
 /**
@@ -275,13 +315,7 @@ static Stack _calc_proceed(Stack s, const char* command, int depth) {
             _calc_error("stack underflow");
             return s;
         }
-        if (stack_top(s)->kind == VAL_STR) {
-            fputs(stack_top(s)->str, stdout);
-            putchar('\n');
-        } else {
-            mpz_out_str(stdout, 10, stack_top(s)->num);
-            puts("");
-        }
+        _calc_print(stack_top(s), true);
         return s;
     }
 
@@ -293,10 +327,7 @@ static Stack _calc_proceed(Stack s, const char* command, int depth) {
         }
         Value a;
         s = stack_pop(s, &a);
-        if (a.kind == VAL_STR)
-            fputs(a.str, stdout);
-        else
-            mpz_out_str(stdout, 10, a.num);
+        _calc_print(&a, false);
         value_clear(&a);
         return s;
     }
@@ -311,36 +342,18 @@ static Stack _calc_proceed(Stack s, const char* command, int depth) {
         }
         Value a;
         s = stack_pop(s, &a);
-        if (a.kind == VAL_STR) {
+        if (a.kind == VAL_STR)
             fputs(a.str, stdout);
-        } else {
-            mpz_abs(a.num, a.num);
-            size_t nbytes = mpz_sizeinbase(a.num, 256);  // at least 1, even for zero
-            unsigned char *bytes = malloc(nbytes);
-            if (!bytes)
-                rpn_fatal("memory allocation error");
-            size_t count = 0;
-            mpz_export(bytes, &count, 1, 1, 1, 0, a.num);
-            if (count == 0)
-                putchar(0);  // zero prints as a single NUL byte, as in dc
-            else
-                fwrite(bytes, 1, count, stdout);
-            free(bytes);
-        }
+        else
+            _calc_print_bytes(a.num);
         value_clear(&a);
         return s;
     }
 
     // Print all the stack
     if (strcmp(command, "f") == 0) {
-        for (size_t i = s->size; i-- > 0; ) {
-            if (s->vals[i].kind == VAL_STR)
-                puts(s->vals[i].str);
-            else {
-                mpz_out_str(stdout, 10, s->vals[i].num);
-                puts("");
-            }
-        }
+        for (size_t i = s->size; i-- > 0; )
+            _calc_print(&s->vals[i], true);
         return s;
     }
 
