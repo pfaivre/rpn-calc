@@ -123,6 +123,7 @@ Write new code as if it will be audited against these rubrics:
 - `number.c/number.h`: Decimal number arithmetic (value = num / 10^scale) and printing
 - `registers.c/registers.h`: Register file (per-register value stacks and arrays)
 - `io.c/io.h`: Input/output utilities
+- `examples/`: sample scripts (also run by the dc compliance suite)
 - `makefile`: Build configuration
 
 ## Special Notes

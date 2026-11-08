@@ -75,6 +75,17 @@ $ make
 $ ./rpn
 ```
 
+## Examples
+`examples/demo.rpn` tours most commands — arithmetic, scale, bases, stack
+operations, strings, macros, registers, arrays, conditionals, loops, `q`/`Q`.
+`examples/fibonacci.rpn` is a small loop demo. Both run identically under rpn
+and GNU dc, and are exercised by the dc compliance suite:
+
+```sh
+$ ./rpn examples/demo.rpn
+$ dc examples/demo.rpn
+```
+
 ## Commands
 `[...]` Pushes a string literal onto the stack. The outer brackets are not part of the string; inner bracket pairs are kept, so nesting works (`[[a]b]` pushes `[a]b`). Spaces, `#` and digits are allowed inside, and the literal may be written without separating spaces (`2[ab]p`). A literal not closed on the same line is an error.
 

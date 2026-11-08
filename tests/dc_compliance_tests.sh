@@ -279,6 +279,10 @@ same_file "$tmpdir/sbad" "$tmpdir/s2"        # error in a file: both error, sess
 same_file "$tmpdir/snonl"                    # no trailing newline
 same_file "$tmpdir/nope" "$tmpdir/s1"        # missing file: both error, later files still run
 
+# The shipped example scripts must produce identical output under rpn and dc
+same_file examples/demo.rpn
+same_file examples/fibonacci.rpn
+
 # ===== IDENTICAL TO dc: | (modular exponentiation) =====
 same "2 3 5 | p"          "3"
 same "2 0 5 | p"          "1"
