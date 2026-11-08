@@ -34,6 +34,7 @@ SOFTWARE.
 #include "io.h"
 #include "number.h"
 #include "stack.h"
+#include "tokenize.h"
 
 /* Maximum nesting depth of macro execution (x). A deeper nesting is
  * rejected with an error instead of overflowing the C stack. */
@@ -59,6 +60,19 @@ static int _calc_quit = 0;
 static bool _calc_exitAll = false;
 
 /**
+ * Core of the error reporters: print "rpn: <msg>" on stderr and set the
+ * error flag so main can exit non-zero
+ * @param fmt printf-style format (the "rpn: " prefix and newline are added)
+ * @param ap The variadic arguments
+ */
+static void _calc_verrorf(const char *fmt, va_list ap) {
+    fputs("rpn: ", stderr);
+    vfprintf(stderr, fmt, ap);
+    fputc('\n', stderr);
+    _calc_errorFlag = true;
+}
+
+/**
  * Report a formatted error on stderr and remember it, so main can exit
  * non-zero
  * @param fmt printf-style format (the "rpn: " prefix and newline are added)
@@ -66,11 +80,8 @@ static bool _calc_exitAll = false;
 static void _calc_errorf(const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    fputs("rpn: ", stderr);
-    vfprintf(stderr, fmt, args);
-    fputc('\n', stderr);
+    _calc_verrorf(fmt, args);
     va_end(args);
-    _calc_errorFlag = true;
 }
 
 /**
@@ -96,11 +107,8 @@ bool calc_had_error() {
 void calc_report_errorf(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    fputs("rpn: ", stderr);
-    vfprintf(stderr, fmt, ap);
-    fputc('\n', stderr);
+    _calc_verrorf(fmt, ap);
     va_end(ap);
-    _calc_errorFlag = true;
 }
 
 /**
@@ -121,7 +129,32 @@ static bool _calc_top_two_numeric(Stack s) {
     return stack_top(s)->kind == VAL_NUM && stack_second(s)->kind == VAL_NUM;
 }
 
+/**
+ * Whether the top three values of the stack are all numbers
+ * @param s Stack to inspect (must have at least three values)
+ * @return true when the top, second and third values are all numbers
+ */
+static bool _calc_top_three_numeric(Stack s) {
+    return stack_top(s)->kind == VAL_NUM && stack_second(s)->kind == VAL_NUM
+        && stack_third(s)->kind == VAL_NUM;
+}
+
+/** Pop n values off the stack (clearing each) and push out in their place
+ * (out is cleared after the push). The single pop/clear/push tail shared by
+ * the numeric command helpers, so the operands are released exactly once. */
+static Stack _calc_replace_top(Stack s, int n, Value out) {
+    Value tmp;
+    for (int i = 0; i < n; i++) {
+        s = stack_pop(s, &tmp);
+        value_clear(&tmp);
+    }
+    s = stack_push_value(s, out);
+    value_clear(&out);
+    return s;
+}
+
 typedef const char *(*NumberBinop)(const Value *, const Value *, long, Value *);
+typedef const char *(*NumberTernop)(const Value *, const Value *, const Value *, Value *);
 
 /**
  * Apply a scale-aware binary operation to the top two values of the stack;
@@ -145,14 +178,32 @@ static Stack _calc_num_binop(Stack s, NumberBinop op) {
         _calc_error(err);
         return s;
     }
-    Value a, b;
-    s = stack_pop(s, &b);
-    s = stack_pop(s, &a);
-    value_clear(&a);
-    value_clear(&b);
-    s = stack_push_value(s, out);
-    value_clear(&out);
-    return s;
+    return _calc_replace_top(s, 2, out);
+}
+
+/**
+ * Apply a ternary operation to the top three values of the stack, passed as
+ * (third, second, top); on error the operands stay on the stack
+ * @param s Stack to modify
+ * @param op The operation (e.g. number_powm)
+ * @return The stack after the operation
+ */
+static Stack _calc_num_ternop(Stack s, NumberTernop op) {
+    if (!stack_hasAtLeast(s, 3)) {
+        _calc_error("stack underflow");
+        return s;
+    }
+    if (!_calc_top_three_numeric(s)) {
+        _calc_error("non-numeric value");
+        return s;
+    }
+    Value out;
+    const char *err = op(stack_third(s), stack_second(s), stack_top(s), &out);
+    if (err) {
+        _calc_error(err);
+        return s;
+    }
+    return _calc_replace_top(s, 3, out);
 }
 
 /**
@@ -555,33 +606,8 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
 
     // |: modular exponentiation b^e mod m — pops the modulus (top), the
     // exponent and the base; on error the operands stay on the stack
-    if (strcmp(command, "|") == 0) {
-        if (!stack_hasAtLeast(s, 3)) {
-            _calc_error("stack underflow");
-            return s;
-        }
-        if (stack_top(s)->kind != VAL_NUM || stack_second(s)->kind != VAL_NUM
-            || stack_third(s)->kind != VAL_NUM) {
-            _calc_error("non-numeric value");
-            return s;
-        }
-        Value out;
-        const char *err = number_powm(stack_third(s), stack_second(s), stack_top(s), &out);
-        if (err) {
-            _calc_error(err);
-            return s;
-        }
-        Value m, e, b;
-        s = stack_pop(s, &m);
-        s = stack_pop(s, &e);
-        s = stack_pop(s, &b);
-        value_clear(&m);
-        value_clear(&e);
-        value_clear(&b);
-        s = stack_push_value(s, out);
-        value_clear(&out);
-        return s;
-    }
+    if (strcmp(command, "|") == 0)
+        return _calc_num_ternop(s, number_powm);
 
     // Square root
     if (strcmp(command, "v") == 0) {
@@ -802,151 +828,6 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
 }
 
 /**
- * Whether c continues the current token
- * @param token Token built so far
- * @param len Length of token
- * @param c The next character
- * @return true when c belongs to the token being built
- */
-static bool _calc_token_continues(const char *token, size_t len, char c) {
-    // A digit char (0-9 or hex letter A-F) continues a number (possibly
-    // negative: _ prefix, or after a .)
-    if (number_digit_value(c) >= 0)
-        return len > 0 && (token[len-1] == '_' || token[len-1] == '.'
-                           || number_digit_value(token[len-1]) >= 0);
-
-    // A '.' continues a number token that does not contain one yet: 1.5, .5
-    // and 1. are single tokens, and a second '.' starts a new token
-    // (1..2 is read as 1. then .2)
-    if (c == '.') {
-        if (strchr(token, '.') != NULL)
-            return false;
-        for (size_t i = 0; i < len; i++)
-            if (token[i] != '_' && number_digit_value(token[i]) < 0)
-                return false;
-        return true;
-    }
-
-    // The two-character conditionals !>, !< and !=
-    if ((c == '>' || c == '<' || c == '=') && len == 1 && token[0] == '!')
-        return true;
-
-    return false;
-}
-
-/**
- * Find the first command on the string
- * @param token An allocated string to store the token (a string literal is
- * stored without its outer brackets)
- * @param str String to search the element on (operator, operand or command)
- * @param is_string Set to true when the token is a [...] string literal
- * @return Pointer to str after the extracted token, or NULL at end of input
- * or on an unterminated string literal
- */
-static char *_calc_firstToken(char *token, char *str, bool *is_string) {
-    size_t i = 0;
-
-    *is_string = false;
-
-    if (!token)
-        return NULL;
-
-    // End of input: clear the token so the caller's loop stops
-    if (!str) {
-        token[0] = '\0';
-        return NULL;
-    }
-
-    // Ignore leading spaces, tabs and new lines
-    while (*str == ' ' || *str == '\t' || *str == '\n')
-        str++;
-
-    if (*str == '\0') {
-        token[0] = '\0';
-        return NULL;
-    }
-
-    // String literal: copy everything up to the matching ']', keeping inner
-    // bracket pairs (nesting is allowed: [[a]b] is the string "[a]b")
-    if (*str == '[') {
-        int depth = 1;
-        char *p = str + 1;
-
-        token[0] = '\0';
-        while (*p != '\0') {
-            if (*p == ']') {
-                if (--depth == 0) {
-                    p++;
-                    break;
-                }
-            } else if (*p == '[') {
-                depth++;
-            }
-            token[i++] = *p++;
-            token[i] = '\0';
-        }
-        if (depth != 0) {
-            _calc_error("unterminated string");
-            token[0] = '\0';
-            return NULL;
-        }
-        *is_string = true;
-        return p;
-    }
-
-    token[i] = '\0';
-
-    // Copy token chars until the next one or end of string
-    while (*str != ' ' && *str != '\t' && *str != '\n' && *str != '\0') {
-        // Stop when the next char does not belong to the current token
-        if (i > 0 && !_calc_token_continues(token, i, *str))
-            break;
-        token[i++] = *str++;
-        token[i] = '\0';
-    }
-
-    return str;
-}
-
-/**
- * Fetch the register name following a register command letter or a
- * conditional operator: the single character after any whitespace, as in dc
- * (`sA2` names register A and leaves the 2 to be parsed as a number). A
- * comment or a string literal is never a name: a '#' char means the rest of
- * the line is a comment, so the command is left without a name.
- * @param ptr Input position, advanced past the name character
- * @return The register name, or -1 when there is none (error reported)
- */
-static int _calc_register_name(char **ptr) {
-    while (**ptr == ' ' || **ptr == '\t' || **ptr == '\n')
-        (*ptr)++;
-    char c = **ptr;
-    if (c == '\0' || c == '#' || c == '[') {
-        _calc_error("expected a single-character register name");
-        return -1;
-    }
-    (*ptr)++;
-    return (unsigned char) c;
-}
-
-/**
- * Whether a token is a comparison conditional operator (>, <, =, !>, !<, !=)
- * @param token Token to inspect
- * @return Pointer to the operator within token, or NULL when not a conditional
- */
-static const char *_calc_conditional_op(const char *token) {
-    // >, < and = are always single-char tokens (the tokenizer splits after
-    // any non-digit)
-    if (strchr("><=", token[0]) != NULL)
-        return token;
-    // !>, !< and != are the only two-char tokens starting with !
-    if (token[0] == '!' && token[1] != '\0' && token[2] == '\0'
-        && strchr("><=", token[1]) != NULL)
-        return token;
-    return NULL;
-}
-
-/**
  * Performs a set of commands (e.g. "2 3*p") at a given macro nesting depth
  * @param s Stack to modify
  * @param regs Register file to modify
@@ -972,7 +853,7 @@ static Stack _calc_parse_depth(Stack s, Registers regs, char* string, int depth)
             break;
         }
 
-        ptr = _calc_firstToken(token, ptr, &is_string);
+        ptr = tokenize_first_token(token, ptr, &is_string);
         if (ptr == NULL)
             break;
 
@@ -992,7 +873,7 @@ static Stack _calc_parse_depth(Stack s, Registers regs, char* string, int depth)
         // both name register a; sA2 names register A and pushes 2, as in dc)
         if (strchr("slSL:;", token[0]) != NULL) {
             char cmd = token[0];
-            int name = _calc_register_name(&ptr);
+            int name = tokenize_register_name(&ptr);
             if (name < 0)
                 break;
             s = _calc_register_cmd(s, regs, cmd, (unsigned char) name);
@@ -1001,10 +882,10 @@ static Stack _calc_parse_depth(Stack s, Registers regs, char* string, int depth)
 
         // Comparison conditionals (>, <, =, !>, !<, !=) also take the register
         // name as the next character
-        const char *op = _calc_conditional_op(token);
+        const char *op = tokenize_conditional_op(token);
         if (op != NULL) {
             char opbuf[3] = { op[0], op[1], '\0' };
-            int name = _calc_register_name(&ptr);
+            int name = tokenize_register_name(&ptr);
             if (name < 0)
                 break;
             s = _calc_conditional(s, regs, opbuf, (unsigned char) name, depth);

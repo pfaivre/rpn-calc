@@ -278,6 +278,7 @@ same_file -e '9 p' "$tmpdir/s1"              # -e runs before files
 same_file "$tmpdir/sbad" "$tmpdir/s2"        # error in a file: both error, session continues
 same_file "$tmpdir/snonl"                    # no trailing newline
 same_file "$tmpdir/nope" "$tmpdir/s1"        # missing file: both error, later files still run
+same_file "$tmpdir"                          # a directory: both error
 
 # The shipped example scripts must produce identical output under rpn and dc
 same_file examples/demo.rpn
@@ -294,8 +295,9 @@ same "123456789 987654321 1000000007 | p"  "652541198"
 same "2 3 _5 | p"         "3"        # negative modulus
 same "_2 3 5 | p"         "-3"       # negative base, odd exponent
 same "_2 2 5 | p"         "4"        # negative base, even exponent
-# (scaled-operand cases like "2 3 5.5 | p" are pinned in functional_tests.sh:
-# stdout matches dc, but dc also prints a "Runtime warning" on stderr)
+# (scaled-operand | cases are pinned in functional_tests.sh: with a fractional
+# modulus rpn follows dc's documented Sm^Lm% semantics, where dc's own |
+# output is inconsistent, and dc prints a "Runtime warning" on stderr)
 same "2 99999999999999999999999999 5 | p"  "3"   # huge exponent
 same "2 1000000000000000000000 97 | p"     "61"
 same "2 3 0 |"                        # modulus zero: both error
@@ -307,6 +309,9 @@ same "1 2 |"                          # underflow: both error
 # the true result.
 # dc: "2 k 2 3 5 | p" -> stdout "0", no error, exit 0.
 diverges "2 k 2 3 5 | p"  "3"  ""  0
+# dc 1.5.2 returns 1 for e=0, m=+-1; rpn returns the correct 0 (dc's own
+# Sm^Lm% gives 0: "0 0 ^ 1 % p" -> 0 in dc)
+diverges "3 0 1 | p"  "0"  ""  0
 
 # ===== DELIBERATE DIVERGENCES from dc (each pinned, with dc's behavior noted) =====
 

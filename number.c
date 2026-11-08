@@ -622,29 +622,6 @@ const char *number_pow(const Value *base, const Value *exp, long k, Value *out) 
     return err;
 }
 
-/** r = base^exp mod mod (mod > 0, exp >= 0), by square and multiply so the
- * exponent can be arbitrarily large */
-static void powm_mpz(mpz_t r, const mpz_t base, const mpz_t exp, const mpz_t mod) {
-    mpz_t b, e;
-    mpz_init(b);
-    mpz_init(e);
-    mpz_mod(b, base, mod);  // non-negative for positive mod
-    mpz_set(e, exp);
-    mpz_set_ui(r, 1);
-    mpz_mod(r, r, mod);     // handles mod == 1
-    while (mpz_sgn(e) > 0) {
-        if (mpz_odd_p(e)) {
-            mpz_mul(r, r, b);
-            mpz_mod(r, r, mod);
-        }
-        mpz_mul(b, b, b);
-        mpz_mod(b, b, mod);
-        mpz_tdiv_q_2exp(e, e, 1);
-    }
-    mpz_clear(b);
-    mpz_clear(e);
-}
-
 const char *number_powm(const Value *base, const Value *exp, const Value *mod, Value *out) {
     if (mpz_sgn(mod->num) == 0)
         return "remainder by zero";
@@ -669,7 +646,7 @@ const char *number_powm(const Value *base, const Value *exp, const Value *mod, V
     mpz_abs(mn, mod->num);
     bool neg_base = mpz_sgn(bi) < 0;
     mpz_abs(bi, bi);
-    powm_mpz(r0, bi, ei, mn);          // |b|^e mod |mn|
+    mpz_powm(r0, bi, ei, mn);            // |b|^e mod |mn| (mod != 0, exp >= 0)
     if (mod->scale > 0) {
         pow10(t, mod->scale);
         mpz_mul(r0, r0, t);

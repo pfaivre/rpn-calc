@@ -1093,6 +1093,13 @@ tests_run=$((tests_run + 1))
 r=$(./rpn "$tmpd/q.rpn" </dev/null 2>/dev/null)
 [ "$r" = "1" ] || { failures=$((failures+1)); echo "FAIL q in file: got '$r'"; }
 
+# a directory passed as a file argument is a read error (exit 1), not silent EOF
+tests_run=$((tests_run + 1))
+r=$(./rpn "$tmpd" </dev/null 2>"$tmpd/err"); code=$?
+if [ -n "$r" ] || [ "$code" != "1" ] || ! grep -q "could not read" "$tmpd/err"; then
+    failures=$((failures+1)); echo "FAIL directory arg: out='$r' code=$code err='$(cat "$tmpd/err")'"
+fi
+
 rm -rf "$tmpd"
 
 # ===== | (MODULAR EXPONENTIATION) =====
@@ -1104,6 +1111,7 @@ test "2 3 5 | p"  "3"
 test "2 0 5 | p"  "1"
 test "0 0 5 | p"  "1"
 test "2 3 1 | p"  "0"
+test "3 0 1 | p"  "0"          # e=0, m=1: correct 0 (dc 1.5.2 gives 1)
 test "0 5 3 | p"  "0"
 test "7 0 3 | p"  "1"
 test "10 100 7 | p"  "4"
@@ -1119,7 +1127,7 @@ test "2.5 3 5.00 | p"  "3.00"
 test "2 99999999999999999999999999 5 | p"  "3"    # huge exponent
 test "2 1000000000000000000000 97 | p"  "61"
 test "2 3 5 | f"  "3"
-test "1 2 3 4 | p"  "0"         # 3^2 mod 4 = 1? no: pops 4,3,2 -> 2^3 mod 4 = 0
+test "1 2 3 4 | p"  "0"         # pops 4,3,2: 2^3 mod 4 = 0
 test "[2 3 5 | p] x"  "3"
 test "5 sa 2 3 la | p"  "3"
 test "16 o 255 8 257 | p"  "100"        # 255^8 mod 257 = 256 = 0x100

@@ -118,7 +118,8 @@ Write new code as if it will be audited against these rubrics:
 ## Project Structure
 
 - `main.c`: Entry point and command-line parsing
-- `calc.c/calc.h`: Calculator logic and RPN parsing
+- `calc.c/calc.h`: Calculator logic and RPN parsing/evaluation
+- `tokenize.c/tokenize.h`: Lexer — turns an input line into tokens (pure, no calculator state)
 - `stack.c/stack.h`: Stack of tagged values (decimal number or string)
 - `number.c/number.h`: Decimal number arithmetic (value = num / 10^scale) and printing
 - `registers.c/registers.h`: Register file (per-register value stacks and arrays)

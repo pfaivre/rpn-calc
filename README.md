@@ -1,5 +1,5 @@
 # rpn-calc [![Build and test](https://github.com/pfaivre/rpn-calc/actions/workflows/build-test.yml/badge.svg?branch=master)](https://github.com/pfaivre/rpn-calc/actions/workflows/build-test.yml)
-A humble dc clone
+A humble dc clone, almost entirely compliant with it, with an emphasis on arithmetic correctness and execution safety.
 
 ## Synopsis
 ```sh
@@ -230,7 +230,9 @@ rpn deliberately differs from dc in the following ways:
 - With a nonzero scale factor `k`, dc 1.5.2's `|` returns 0 (a bug — its manual
   says `|` is like `Sm^Lm%`, which at k=2 gives 3.00); rpn computes the true
   modular exponentiation. Non-integer `|` operands are truncated silently,
-  where dc prints a runtime warning.
+  where dc prints a runtime warning. At scale 0 with exponent 0 and modulus
+  ±1 (`b 0 1 |`), dc 1.5.2 returns 1 while rpn returns the correct 0, matching
+  dc's own `Sm^Lm%` semantics (`0 0 ^ 1 % p` is 0 in dc).
 - The shell escape (`!`) is deliberately not implemented: in dc it runs the
   rest of the line through the shell, which would let a script file or a
   pasted expression execute arbitrary commands. rpn reports `!` as
@@ -260,10 +262,11 @@ input), so the parser and evaluator are built to fail safely instead of
 crashing or executing anything:
 
 - No shell escape (`!`): calculator input never spawns a process.
-- Bounded resource use, all rejected with a graceful error rather than
+- Bounded memory and result size, rejected with a graceful error rather than
   exhausting memory or the C stack: the scale factor is capped at 1,000,000
   (`k`), `^` results at 32 MiB, and macro nesting at 1,000 levels (`x`,
-  conditionals, `?`).
+  conditionals, `?`). (`|` keeps its result smaller than the modulus, but its
+  running time grows with the exponent's bit length, as in dc.)
 - Every size computation that feeds an allocation uses checked arithmetic
   (`<stdckdint.h>`); allocation failures are fatal, clean errors.
 - Errors are reported on stderr and the session continues; the exit status
@@ -271,9 +274,9 @@ crashing or executing anything:
 - `tests/adversarial_tests.sh` (run by `make test`, and by CI under
   ASan/UBSan with leak detection) targets these flaw classes directly:
   capacity-boundary aliasing, self-executing and deeply nested macros,
-  exponent allocation bombs, non-numeric operands on every numeric command,
-  100 KB tokens, the `P` byte-export path, a 100k-push realloc stress, and a
-  fixed-seed fuzz smoke test.
+  exponent allocation bombs, `|` modular-exponentiation stress, non-numeric
+  operands on every numeric command, 100 KB tokens, the `P` byte-export path,
+  a 100k-push realloc stress, and a fixed-seed fuzz smoke test.
 
 ## License
 Copyright 2016-2026 Pierre Faivre. This is free software, and may be redistributed

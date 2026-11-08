@@ -28,6 +28,7 @@ SOFTWARE.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include <unistd.h>
 #include <getopt.h>
 
@@ -37,10 +38,28 @@ SOFTWARE.
 #include "io.h"
 
 /**
- * Things to be done next:
- * TODO: (nothing major left; the shell escape ! is deliberately not implemented)
+ * Read and execute lines from a stream until EOF or a top-level q. A read
+ * error (e.g. a directory passed as a script file, where getline fails) is
+ * reported but does not stop the session.
+ * @param s Stack to modify
+ * @param regs Register file to modify
+ * @param stream Stream to read from
+ * @param name Name of the stream for error messages (a file path, or
+ *        "standard input")
+ * @return The stack after the parsed lines
  */
-
+static Stack run_lines(Stack s, Registers regs, FILE *stream, const char *name) {
+    char *line;
+    while ((line = read_line_stream(stream)) != NULL) {
+        s = calc_parse(s, regs, line);
+        free(line);
+        if (calc_quit_requested())  // q at the top level exits the program
+            break;
+    }
+    if (ferror(stream))
+        calc_report_errorf("could not read %s: %s", name, strerror(errno));
+    return s;
+}
 
 int main(int argc, char **argv) {
     char *expression = NULL;
@@ -94,30 +113,17 @@ int main(int argc, char **argv) {
             break;
         FILE *f = fopen(argv[i], "r");
         if (!f) {
-            calc_report_errorf("could not open file %s", argv[i]);
+            calc_report_errorf("could not open file %s: %s", argv[i], strerror(errno));
             continue;
         }
-        char *line;
-        while ((line = read_line_stream(f)) != NULL) {
-            s = calc_parse(s, regs, line);
-            free(line);
-            if (calc_quit_requested())  // q at the top level exits the program
-                break;
-        }
+        s = run_lines(s, regs, f, argv[i]);
         fclose(f);
     }
 
     // Standard input, one line per line: after script files (as in dc), or
     // when neither -e nor files were given
-    if ((optind < argc || !expression) && !calc_quit_requested()) {
-        char *line;
-        while ((line = read_line()) != NULL) {
-            s = calc_parse(s, regs, line);
-            free(line);
-            if (calc_quit_requested())
-                break;
-        }
-    }
+    if ((optind < argc || !expression) && !calc_quit_requested())
+        s = run_lines(s, regs, stdin, "standard input");
 
     stack_delete(s);
     registers_delete(regs);

@@ -1,5 +1,5 @@
 CC		= gcc
-OBJS	= main.o calc.o stack.o io.o registers.o number.o
+OBJS	= main.o calc.o stack.o io.o registers.o number.o tokenize.o
 STD		= c23
 CFLAGS	= -c -g -Wall -pedantic -std=$(STD) -MMD -MP -D_FORTIFY_SOURCE=3 -O2
 LDFLAGS	= -lgmp
