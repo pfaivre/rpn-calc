@@ -29,3 +29,4 @@ valgrind: $(PGM)
 
 test: $(PGM)
 		bash ./tests/functional_tests.sh
+		bash ./tests/adversarial_tests.sh
