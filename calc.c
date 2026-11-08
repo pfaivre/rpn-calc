@@ -629,7 +629,8 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
     }
 
     // Q: pop a count N and quit N levels of macro execution; it never exits
-    // the program (an error when N exceeds the current depth)
+    // the program. As in dc, an over-depth count is an error (popped) but
+    // still quits the available levels, min(N, depth)
     if (strcmp(command, "Q") == 0) {
         if (!stack_hasAtLeast(s, 1)) {
             _calc_error("stack underflow");
@@ -642,10 +643,10 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
         }
         Value n;
         s = stack_pop(s, &n);
-        if (mpz_get_si(n.num) > depth)
+        long count = mpz_get_si(n.num);
+        if (count > depth)
             _calc_error("Q command argument exceeded string execution depth");
-        else
-            _calc_quit = (int) mpz_get_si(n.num);
+        _calc_quit = (int) (count < depth ? count : depth);
         value_clear(&n);
         return s;
     }
@@ -765,6 +766,23 @@ static int _calc_register_name(char **ptr, char *token) {
 }
 
 /**
+ * Whether a token is a comparison conditional operator (>, <, =, !>, !<, !=)
+ * @param token Token to inspect
+ * @return Pointer to the operator within token, or NULL when not a conditional
+ */
+static const char *_calc_conditional_op(const char *token) {
+    // >, < and = are always single-char tokens (the tokenizer splits after
+    // any non-digit)
+    if (strchr("><=", token[0]) != NULL)
+        return token;
+    // !>, !< and != are the only two-char tokens starting with !
+    if (token[0] == '!' && token[1] != '\0' && token[2] == '\0'
+        && strchr("><=", token[1]) != NULL)
+        return token;
+    return NULL;
+}
+
+/**
  * Performs a set of commands (e.g. "2 3*p") at a given macro nesting depth
  * @param s Stack to modify
  * @param regs Register file to modify
@@ -819,17 +837,14 @@ static Stack _calc_parse_depth(Stack s, Registers regs, char* string, int depth)
         }
 
         // Comparison conditionals (>, <, =, !>, !<, !=) also take the register
-        // name as the next token. A token starting with >, < or = is always a
-        // single char (the tokenizer splits after any non-digit); a token
-        // starting with ! is two chars only for the !>, !< and != operators.
-        if (strchr("><=", token[0]) != NULL
-            || (token[0] == '!' && token[1] != '\0' && token[2] == '\0'
-                && strchr("><=", token[1]) != NULL)) {
-            char op[3] = { token[0], token[1], '\0' };
+        // name as the next token
+        const char *op = _calc_conditional_op(token);
+        if (op != NULL) {
+            char opbuf[3] = { op[0], op[1], '\0' };
             int name = _calc_register_name(&ptr, token);
             if (name < 0)
                 break;
-            s = _calc_conditional(s, regs, op, (unsigned char) name, depth);
+            s = _calc_conditional(s, regs, opbuf, (unsigned char) name, depth);
             continue;
         }
 
@@ -849,4 +864,17 @@ static Stack _calc_parse_depth(Stack s, Registers regs, char* string, int depth)
  */
 Stack calc_parse(Stack s, Registers regs, char* string) {
     return _calc_parse_depth(s, regs, string, 0);
+}
+
+/**
+ * Performs the commands of a -e expression. Like dc, -e strings are
+ * executed one macro level above the top level (depth 1), so q/Q counting
+ * in -e mode matches dc
+ * @param s Stack to modify
+ * @param regs Register file to modify
+ * @param string Commands to execute
+ * @return The top of the stack after performing the commands
+ */
+Stack calc_parse_expression(Stack s, Registers regs, char* string) {
+    return _calc_parse_depth(s, regs, string, 1);
 }

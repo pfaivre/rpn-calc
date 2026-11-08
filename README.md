@@ -123,7 +123,7 @@ The comparison is numeric only: a string operand is an error and the operands st
 
 `q` Quits two levels of macro execution (the current macro and the one that invoked it), abandoning the rest of their input. Issued at the top level, or in a macro called directly from the top level, it exits the program (like dc). A numeric top of stack is not popped.
 
-`Q` Pops a count N and quits N levels of macro execution, abandoning the rest of their input. It never exits the program: N larger than the current macro depth is an error (the count is popped), and a non-number, negative or too-large count is an error with the operand kept.
+`Q` Pops a count N and quits N levels of macro execution, abandoning the rest of their input. It never exits the program: N larger than the current macro depth is an error (the count is popped, but the available levels are still quit, as in dc), and a non-number, negative or too-large count is an error with the operand kept.
 
 ## Compatibility with dc
 For the commands listed above, rpn behaves like dc (checked against GNU dc 1.5.2):
@@ -148,8 +148,8 @@ For the commands listed above, rpn behaves like dc (checked against GNU dc 1.5.2
 - Macro execution with `x`: a string is popped and run as commands on the same stack, macros nest, and `x` on a number leaves the stack untouched.
 - Registers: `s`/`l`/`S`/`L` on a per-register value stack (with `s` replacing the content, `l` peeking, `L` erroring on an empty register stack, and `l` on an empty register loading 0), and `:`/`;` arrays per register (index on top, missing index loads 0, negative or non-numeric index rejected with the operands kept, values may be strings, a register's stack and array are independent).
 - Conditionals `>r`, `<r`, `=r`, `!>r`, `!<r`, `!=r`: two values popped and compared as numbers (top against second), the register executed as a macro when the condition holds, without being consumed; a string operand reports `non-numeric value` with the operands kept.
-- `q` (quit two levels, exiting the program at the top level or in a directly-called macro) and `Q` (pop a count, quit that many levels, never exit; over-depth or invalid counts are errors as in dc).
-- The `-e` option, and reading expressions from standard input without it.
+- `q` (quit two levels, exiting the program at the top level or in a directly-called macro) and `Q` (pop a count, quit that many levels, never exit; over-depth counts still quit the available levels and invalid counts are errors, as in dc).
+- The `-e` option, executed one macro level above the top level as in dc, and reading expressions from standard input without it.
 
 rpn deliberately differs from dc in the following ways:
 

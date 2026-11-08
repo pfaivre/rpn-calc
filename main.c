@@ -82,9 +82,10 @@ int main(int argc, char **argv) {
     Stack s = stack_init();
     Registers regs = registers_init();
 
-    // Option -e: evaluate the concatenated expressions as one input
+    // Option -e: evaluate the concatenated expressions as one input, at
+    // macro depth 1 like dc's -e strings
     if (expression) {
-        s = calc_parse(s, regs, expression);
+        s = calc_parse_expression(s, regs, expression);
         free(expression);
     }
     // Otherwise read expressions from the standard input, one per line

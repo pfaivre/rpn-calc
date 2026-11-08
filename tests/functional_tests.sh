@@ -109,6 +109,22 @@ function test_e ()
     fi
 }
 
+# test_e_error EXPECTED_STDERR_SUBSTRING ARGS... -- ./rpn ARGS... writes the substring to stderr
+function test_e_error ()
+{
+    local expected_error=$1
+    shift
+    local error_result
+
+    tests_run=$((tests_run + 1))
+    error_result=$(./rpn "$@" 2>&1 >/dev/null)
+
+    if [[ "$error_result" != *"$expected_error"* ]]; then
+        failures=$((failures + 1))
+        echo "FAIL './rpn $*': expected stderr to contain '$expected_error', got '$error_result'"
+    fi
+}
+
 # test_contains SUBSTRING ARGS... -- stdout of ./rpn ARGS... contains SUBSTRING
 function test_contains ()
 {
@@ -717,6 +733,26 @@ test_error_stack "1 p 1 Q 2 p"  $'1\n2'  "exceeded string execution depth"  # Q 
 
 # A loop terminated by Q fired from a conditional (verified against dc)
 test "3 sc [1 Q] sq [lc p lc 1 - sc lc 0 =q 0 lc >m] sm lmx"  $'3\n2\n1'
+
+# Over-depth Q (N > depth) is an error (count popped) but still unwinds the
+# available levels, min(N, depth), as in dc
+test_error_stack "[1 p 2 Q 2 p] x 3 p"  $'1\n3'  "exceeded string execution depth"
+test_error_stack "[1 p 3 Q 9 p] x 3 p"  $'1\n3'  "exceeded string execution depth"
+test_error_stack "[[1 p 3 Q 9 p] x 3 p] x 4 p"  $'1\n4'  "exceeded string execution depth"
+test_error_stack "[[[1 p 5 Q 2 p] x 3 p] x 4 p] x 5 p"  $'1\n5'  "exceeded string execution depth"
+test_error_stack "[2 Q] x 5 p"  "5"  "exceeded string execution depth"
+
+# ===== -e RUNS AT MACRO DEPTH 1 (as in dc) =====
+
+# In -e mode the expression is one macro level above the top level, so q/Q
+# counting matches dc: 1 Q at depth 1 is valid and unwinds the -e frame
+test_e "" -e "1 Q 5 p"
+test_e "" -e "[2 Q] x 5 p"
+test_e "5" -e "0 Q 5 p"
+test_e "1" -e "1 p q 3 p"
+test_e "5" -e "5 p"
+test_e "1" -e "[1 p 2 Q 2 p] x 3 p"       # 2 Q at depth 2: valid, unwinds both frames
+test_e_error "exceeded string execution depth" -e "5 Q 3 p"  # over-depth at depth 1: error, unwinds the -e frame
 
 # ===== SUMMARY =====
 
