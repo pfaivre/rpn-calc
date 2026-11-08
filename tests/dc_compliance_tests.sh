@@ -118,6 +118,10 @@ same "1 d f"              $'1\n1'
 same "[hello] p"          "hello"
 same "[[a]b] p"           "[a]b"
 same "5 sa la p"          "5"
+same "5 sA2 lA p"         "5"        # the name is one character: A, then 2 is pushed
+same "5 s12 l1 p"         "5"        # digit name followed by a digit: name 1, push 2
+same "[9 p] sA 1 2 >A5 p" $'9\n5'    # conditional name followed by a digit
+same "42 3 :A7 3 ;A p"    "42"       # array command name followed by a digit
 same "5 Sa 6 Sa la la f"  $'6\n6'    # per-register value stack (S pushes, l peeks)
 same "7 La"                              # L on empty register: both error, empty stdout
 same "5 1 :a 1 ;a p"      "5"

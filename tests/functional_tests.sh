@@ -607,6 +607,13 @@ test "la p"  "0"
 
 # Register names are case-sensitive and may be digits
 test "5 sA lA p 6 s1 l1 p"  $'5\n6'
+# The name is a single character even when a digit char follows it: sA2
+# names register A and pushes 2, s12 names register 1 and pushes 2 (as in dc)
+test "5 sA2 lA p"  "5"
+test "5 s12 l1 p"  "5"
+test "5 s 12 l1 p"  "5"          # whitespace before the name is skipped; name is '1'
+test "42 3 :A7 3 ;A p"  "42"
+test "[9 p] sA 1 2 >A5 p"  $'9\n5'
 
 # Registers hold strings too, and macros can be stored and executed
 test "[hi] sa la p"  "hi"
@@ -636,7 +643,6 @@ test_error "Sa"  "stack underflow"
 test_error "La"  "stack register 'a' is empty"
 test_error "5 s"  "expected a single-character register name"
 test_error "5 s [a]"  "expected a single-character register name"
-test_error "5 s 12"  "expected a single-character register name"
 # A comment is never a register name (dc names a register after the space)
 test_error "5 s # note"  "expected a single-character register name"
 test_error "5 s# note"  "expected a single-character register name"

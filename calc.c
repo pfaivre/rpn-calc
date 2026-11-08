@@ -815,22 +815,24 @@ static char *_calc_firstToken(char *token, char *str, bool *is_string) {
 }
 
 /**
- * Fetch the register name following a register command letter (the next
- * token, with or without a separating space). A comment is never a name:
- * a '#' token means the rest of the line is a comment, so the command is
- * left without a name.
- * @param ptr Input position, advanced past the name token
- * @param token Token buffer, overwritten with the name token
+ * Fetch the register name following a register command letter or a
+ * conditional operator: the single character after any whitespace, as in dc
+ * (`sA2` names register A and leaves the 2 to be parsed as a number). A
+ * comment or a string literal is never a name: a '#' char means the rest of
+ * the line is a comment, so the command is left without a name.
+ * @param ptr Input position, advanced past the name character
  * @return The register name, or -1 when there is none (error reported)
  */
-static int _calc_register_name(char **ptr, char *token) {
-    bool is_string;
-    *ptr = _calc_firstToken(token, *ptr, &is_string);
-    if (*ptr == NULL || is_string || token[0] == '#' || token[1] != '\0') {
+static int _calc_register_name(char **ptr) {
+    while (**ptr == ' ' || **ptr == '\t' || **ptr == '\n')
+        (*ptr)++;
+    char c = **ptr;
+    if (c == '\0' || c == '#' || c == '[') {
         _calc_error("expected a single-character register name");
         return -1;
     }
-    return (unsigned char) token[0];
+    (*ptr)++;
+    return (unsigned char) c;
 }
 
 /**
@@ -892,12 +894,11 @@ static Stack _calc_parse_depth(Stack s, Registers regs, char* string, int depth)
             break;
 
         // Register commands (s, l, S, L, : and ;) take the register name as
-        // the next token, with or without a separating space (sa and s a
-        // both name register a). Such a token is always a single char: the
-        // tokenizer splits after any non-digit.
+        // the next character, with or without a separating space (sa and s a
+        // both name register a; sA2 names register A and pushes 2, as in dc)
         if (strchr("slSL:;", token[0]) != NULL) {
             char cmd = token[0];
-            int name = _calc_register_name(&ptr, token);
+            int name = _calc_register_name(&ptr);
             if (name < 0)
                 break;
             s = _calc_register_cmd(s, regs, cmd, (unsigned char) name);
@@ -905,11 +906,11 @@ static Stack _calc_parse_depth(Stack s, Registers regs, char* string, int depth)
         }
 
         // Comparison conditionals (>, <, =, !>, !<, !=) also take the register
-        // name as the next token
+        // name as the next character
         const char *op = _calc_conditional_op(token);
         if (op != NULL) {
             char opbuf[3] = { op[0], op[1], '\0' };
-            int name = _calc_register_name(&ptr, token);
+            int name = _calc_register_name(&ptr);
             if (name < 0)
                 break;
             s = _calc_conditional(s, regs, opbuf, (unsigned char) name, depth);

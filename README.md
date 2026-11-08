@@ -116,7 +116,7 @@ Numbers are stored in base 10 internally: the input base converts digits at pars
 
 `x` If the top value is a string, pops it and executes its contents as commands on the same stack (macros can nest: `[[2 3 + p] x] x` prints `5`). A number is left untouched, not popped.
 
-`s r` Pops the top value of the main stack and stores it in register `r`, replacing its previous content. The register name is the next token, written with or without a separating space (`sa` and `s a` both name register `a`).
+`s r` Pops the top value of the main stack and stores it in register `r`, replacing its previous content. The register name is the next character, written with or without a separating space (`sa` and `s a` both name register `a`; `sA2` names register `A` and then pushes `2`).
 
 `l r` Pushes a copy of the top of register `r` onto the main stack. An empty register loads 0.
 
@@ -198,8 +198,9 @@ rpn deliberately differs from dc in the following ways:
   unimplemented, where dc would run it as a shell escape. A `[...]` literal
   not closed on the same line is an error, where dc keeps reading the
   following lines into the string.
-- The register name is the next token, so `s a` names register `a`, where dc
-  reads the very next character and would name a register after the space.
+- The register name is the next character after any whitespace, so `s a`
+  names register `a`, where dc reads the very next character and would name
+  a register after the space.
   A `#` comment is never a register name: `s # ...` reports `expected a
   single-character register name`, where dc names a register after the space
   and treats the rest of the line as a comment (and compact `s#` in dc names
