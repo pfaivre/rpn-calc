@@ -40,7 +40,6 @@ SOFTWARE.
  * Things to be done next:
  * TODO: Read a script file
  * TODO: Support arbitrary input/output radices
- * TODO: Support q/Q to abort macros
  * TODO: Support arbitrary precision for decimal
  */
 
@@ -94,6 +93,8 @@ int main(int argc, char **argv) {
         while ((line = read_line()) != NULL) {
             s = calc_parse(s, regs, line);
             free(line);
+            if (calc_quit_requested())  // q at the top level exits the program
+                break;
         }
     }
 

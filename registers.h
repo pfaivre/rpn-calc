@@ -31,10 +31,10 @@ SOFTWARE.
 
 #include "stack.h"
 
-/** Number of registers, each named by a single byte (as in dc) */
+/** Number of registers, each named by a single byte */
 #define REGISTER_COUNT 256
 
-/** One cell of a register's array (dc's : and ; commands) */
+/** One cell of a register's array (: and ; commands) */
 typedef struct ArrayEntry {
     mpz_t index;  /**< owned */
     Value val;    /**< owned */
@@ -42,7 +42,7 @@ typedef struct ArrayEntry {
 
 /**
  * A named register: a stack of values (s/l/S/L) and, independently, an
- * array of cells (:/;), as in dc.
+ * array of cells (:/;).
  */
 typedef struct Register {
     Stack stack;          /**< value stack, created lazily */
@@ -66,13 +66,13 @@ Stack register_stack(Registers, unsigned char name);
 
 /**
  * Store a value in the register's array at the given index, replacing the
- * cell if the index already exists (dc's :)
+ * cell if the index already exists (:)
  * @param val Value to store; ownership is taken (moved into the array)
  */
 void register_array_store(Registers, unsigned char name, const mpz_t index, Value val);
 
 /**
- * Find the array cell at the given index (dc's ;)
+ * Find the array cell at the given index (;)
  * @return The stored value, or NULL when the index was never stored
  */
 const Value *register_array_find(Registers, unsigned char name, const mpz_t index);

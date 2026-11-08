@@ -32,5 +32,8 @@ SOFTWARE.
 
 [[nodiscard]] bool calc_had_error();
 
+/** Whether q asked to leave the top-level input (main then stops and exits) */
+[[nodiscard]] bool calc_quit_requested();
+
 #endif
 

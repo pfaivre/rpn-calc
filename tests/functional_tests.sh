@@ -689,6 +689,35 @@ test "5 sc [lc p lc 1 - sc 0 lc >m] sm lmx"  $'5\n4\n3\n2\n1'
 # Compact notation
 test "[9p]sa 1 2>a"  "9"
 
+# ===== q AND Q =====
+
+# q quits two levels of macro execution (the current macro and its invoker);
+# at the top level, or in a macro called directly from the top level, it
+# exits the program. A numeric top of stack is not popped.
+test "1 p q 3 p"  "1"
+test_lines "1"  '1 p q\n3 p\n'                 # stops reading further lines
+test "[1 p q 2 p] x 3 p"  "1"                  # top-level-called macro: exits
+test "[1 p q 2 p] sa lax 3 p"  "1"
+test "[[1 p q 2 p] x 3 p] x 4 p"  $'1\n4'      # at depth 2, unwinds two levels
+test "[[7 q] x] x f"  "7"                      # q does not pop a numeric top
+test "[[1 p 2 q 2 p] x 3 p] x 4 p"  $'1\n4'    # the number before q is not a count
+test_exit_stdin 0 "1"  '1 p q\n'
+
+# Q pops a count N and quits N levels of macro execution; it never exits
+test "[1 p 1 Q 2 p] x 3 p"  $'1\n3'
+test "[[1 p 2 Q 2 p] x 3 p] x 4 p"  $'1\n4'
+test "[1 p 0 Q 2 p] x 3 p"  $'1\n2\n3'         # 0 Q is a no-op
+test "0 Q 5 p"  "5"
+test_error_stack "2 Q f"  ""  "exceeded string execution depth"  # count popped on error
+test_error_stack "[a] Q f"  "a"  "requires a number >= 0"        # operand kept
+test_error_stack "_1 Q f"  "-1"  "requires a number >= 0"
+test_error_stack "999999999999999999999 Q f"  "999999999999999999999"  "requires a number >= 0"
+test_error "Q"  "stack underflow"
+test_error_stack "1 p 1 Q 2 p"  $'1\n2'  "exceeded string execution depth"  # Q never exits
+
+# A loop terminated by Q fired from a conditional (verified against dc)
+test "3 sc [1 Q] sq [lc p lc 1 - sc lc 0 =q 0 lc >m] sm lmx"  $'3\n2\n1'
+
 # ===== SUMMARY =====
 
 if [ "$failures" -eq 0 ]; then
