@@ -33,13 +33,13 @@ SOFTWARE.
 
 #include "calc.h"
 #include "stack.h"
+#include "registers.h"
 #include "io.h"
 
 /**
  * Things to be done next:
  * TODO: Read a script file
  * TODO: Support arbitrary input/output radices
- * TODO: Support registers
  * TODO: Support conditionals
  * TODO: Support arbitrary precision for decimal
  */
@@ -81,22 +81,24 @@ int main(int argc, char **argv) {
     }
 
     Stack s = stack_init();
+    Registers regs = registers_init();
 
     // Option -e: evaluate the concatenated expressions as one input
     if (expression) {
-        s = calc_parse(s, expression);
+        s = calc_parse(s, regs, expression);
         free(expression);
     }
     // Otherwise read expressions from the standard input, one per line
     else {
         char *line;
         while ((line = read_line()) != NULL) {
-            s = calc_parse(s, line);
+            s = calc_parse(s, regs, line);
             free(line);
         }
     }
 
     stack_delete(s);
+    registers_delete(regs);
     return calc_had_error() ? 1 : 0;
 }
 

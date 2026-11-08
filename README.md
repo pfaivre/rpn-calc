@@ -97,6 +97,20 @@ $ ./rpn
 
 `x` If the top value is a string, pops it and executes its contents as commands on the same stack (macros can nest: `[[2 3 + p] x] x` prints `5`). A number is left untouched, not popped.
 
+`s r` Pops the top value of the main stack and stores it in register `r`, replacing its previous content. The register name is the next token, written with or without a separating space (`sa` and `s a` both name register `a`).
+
+`l r` Pushes a copy of the top of register `r` onto the main stack. An empty register loads 0.
+
+`S r` Pops the top value of the main stack and pushes it onto register `r`'s own stack.
+
+`L r` Pops the top of register `r`'s stack and pushes it onto the main stack. It is an error if that register stack is empty.
+
+`: r` Pops two values off the main stack and stores the second popped (the value, which may be a string) at the index given by the first popped (the top) in register `r`'s array, replacing any previous cell at that index. The index must be a nonnegative integer.
+
+`; r` Pops the index off the main stack and pushes the value stored at that index in register `r`'s array, or 0 if the index was never stored.
+
+Registers are named by a single character (256 of them, case-sensitive, digits allowed) and persist across input lines. A register's value stack (`s`/`l`/`S`/`L`) and its array (`:`/`;`) are independent.
+
 ## Compatibility with dc
 For the commands listed above, rpn behaves like dc (checked against GNU dc 1.5.2):
 
@@ -118,6 +132,7 @@ For the commands listed above, rpn behaves like dc (checked against GNU dc 1.5.2
 - Arbitrary-precision integer arithmetic: results are exact, as in dc.
 - String literals `[...]` (with nested brackets), and printing them with `p`, `n`, `P` and `f`: `p` adds a trailing newline, `n` and `P` pop the value and print without one, `f` prints one value per line, top first. Arithmetic on a string reports `non-numeric value` and leaves the operands on the stack, as in dc.
 - Macro execution with `x`: a string is popped and run as commands on the same stack, macros nest, and `x` on a number leaves the stack untouched.
+- Registers: `s`/`l`/`S`/`L` on a per-register value stack (with `s` replacing the content, `l` peeking, `L` erroring on an empty register stack, and `l` on an empty register loading 0), and `:`/`;` arrays per register (index on top, missing index loads 0, negative or non-numeric index rejected with the operands kept, values may be strings, a register's stack and array are independent).
 - The `-e` option, and reading expressions from standard input without it.
 
 rpn deliberately differs from dc in the following ways:
@@ -128,12 +143,19 @@ rpn deliberately differs from dc in the following ways:
   session still continues after an error in both programs.
 - Integers only: no decimal point, no scale (`k`) and no input/output base
   (`i`, `o`) — input and output are always base 10.
-- No registers, conditionals or loops: an unknown command such as `>a` is
-  reported as unimplemented, where dc would treat it as a register or
-  conditional operation. Strings can be pushed, printed and executed with
-  `x`, but there is no register to store them in and no `q`/`Q` to abort a
-  macro early. A `[...]` literal not closed on the same line is an error,
-  where dc keeps reading the following lines into the string.
+- No conditionals or loops: an unknown command such as `>a` is reported as
+  unimplemented, where dc would treat it as a conditional operation. Strings
+  can be pushed, printed, executed with `x` and stored in registers, but
+  there is no `q`/`Q` to abort a macro early. A `[...]` literal not closed
+  on the same line is an error, where dc keeps reading the following lines
+  into the string.
+- The register name is the next token, so `s a` names register `a`, where dc
+  reads the very next character and would name a register after the space.
+  A `#` comment is never a register name: `s # ...` reports `expected a
+  single-character register name`, where dc names a register after the space
+  and treats the rest of the line as a comment (and compact `s#` in dc names
+  register `#`). Array indices are arbitrary precision, where dc 1.5.2 punts
+  on indices beyond an unsigned long.
 
 - A positive exponent that does not fit in an unsigned long, or whose result
   would exceed 32 MiB, is rejected with `exponent too large in raise`, while
@@ -143,7 +165,6 @@ rpn deliberately differs from dc in the following ways:
 ## Limitations
 This program is much more basic than dc and currently lacks some notable features like:
 - decimal numbers
-- memory registers
 - conditionals and loops
 
 ## License

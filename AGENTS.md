@@ -119,7 +119,8 @@ Write new code as if it will be audited against these rubrics:
 
 - `main.c`: Entry point and command-line parsing
 - `calc.c/calc.h`: Calculator logic and RPN parsing
-- `stack.c/stack.h`: Stack implementation
+- `stack.c/stack.h`: Stack of tagged values (number or string)
+- `registers.c/registers.h`: Register file (per-register value stacks and arrays)
 - `io.c/io.h`: Input/output utilities
 - `makefile`: Build configuration
 
@@ -127,7 +128,7 @@ Write new code as if it will be audited against these rubrics:
 
 - The project uses GMP (GNU Multiple Precision Arithmetic Library)
 - Negative numbers are represented with underscore prefix (e.g., `_5`)
-- The calculator supports basic RPN operations: +, -, *, /, %, ~, ^, v, c, p, n, P, f, d, r
+- The calculator supports basic RPN operations: +, -, *, /, %, ~, ^, v, c, p, n, P, f, d, r, x, string literals [...], and registers (s, l, S, L, :, ;)
 - Error messages are written to stderr
 - The codebase follows defensive programming practices
 

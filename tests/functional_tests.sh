@@ -577,6 +577,75 @@ deep="1p"
 for _ in $(seq 1 50); do deep="[${deep}]x"; done
 test "$deep"  "1"
 
+# ===== REGISTERS (s l S L : ;) =====
+# Each command letter is followed by the register name; the name may be
+# written with or without a separating space (sa and s a both name register a)
+
+# s pops and stores (replacing any previous content), l pushes a copy
+test "5 sa la p"  "5"
+test "5 sa 7 sa la p"  "7"
+test "5 s a l a p"  "5"
+
+# l on an empty register loads 0, as in dc
+test "la p"  "0"
+
+# Register names are case-sensitive and may be digits
+test "5 sA lA p 6 s1 l1 p"  $'5\n6'
+
+# Registers hold strings too, and macros can be stored and executed
+test "[hi] sa la p"  "hi"
+test "[1 p] sa la x"  "1"
+test "5 sa [la 1 + p] x"  "6"
+
+# S pushes onto the register's own stack, L pops it back; l peeks
+test "1 2 3 Sa La f"  $'3\n2\n1'
+test "1 Sa 2 Sa la p La La f"  $'2\n1\n2\n2'
+test "[hi] Sa La p"  "hi"
+
+# Registers persist across lines
+test_lines "9"  '9 sa\nla p\n'
+
+# s replaces a whole S-built register stack, not just the top
+test "1 2 Sa 5 sa La p"  "5"
+test_error "1 2 Sa 5 sa La La"  "stack register 'a' is empty"
+
+# Register commands work under -e, and errors exit 1
+test_e "5"  -e "5 sa la p"
+test_exit 1  -e "La"
+test_exit_stdin 1 "5"  '5 sa\nla p\nLa\nLa\n'
+
+# Errors
+test_error "sa"  "stack underflow"
+test_error "Sa"  "stack underflow"
+test_error "La"  "stack register 'a' is empty"
+test_error "5 s"  "expected a single-character register name"
+test_error "5 s [a]"  "expected a single-character register name"
+test_error "5 s 12"  "expected a single-character register name"
+# A comment is never a register name (dc names a register after the space)
+test_error "5 s # note"  "expected a single-character register name"
+test_error "5 s# note"  "expected a single-character register name"
+
+# Arrays (: stores, ; loads): top of stack is the index, missing loads 0
+test "42 3 :a 3 ;a p"  "42"
+test "3 ;a p"  "0"
+test "7 0 :a 0 ;a p"  "7"
+test "1 0 :a 2 0 :a 0 ;a p"  "2"      # storing again overwrites
+test "[hi] 2 :a 2 ;a p"  "hi"         # arrays hold strings
+test "42 3 :a 5 sa 3 ;a p la p"  $'42\n5'  # a register's stack and array are independent
+# Array indices are arbitrary-precision (dc 1.5.2 punts on these)
+test "7 100000000000000000000 :a 100000000000000000000 ;a p"  "7"
+test "100000000000000000000 ;a p"  "0"   # never-stored huge index loads 0
+
+# The index must be a nonnegative integer; on error the operands stay
+test_error_stack "1 [x] :a f"  $'x\n1'  "array index must be a nonnegative integer"
+test_error_stack "[x] ;a f"  "x"  "array index must be a nonnegative integer"
+test_error_stack "5 _2 :a f"  $'-2\n5'  "array index must be a nonnegative integer"
+test_error "5 :a"  "stack underflow"
+test_error ";a"  "stack underflow"
+
+# Compact notation
+test "5salap"  "5"
+
 # ===== SUMMARY =====
 
 if [ "$failures" -eq 0 ]; then

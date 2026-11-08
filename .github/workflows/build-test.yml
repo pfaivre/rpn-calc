@@ -37,7 +37,7 @@ jobs:
       run: sudo apt-get install -y gcc-14 libgmp-dev libasan8 libubsan1
 
     - name: build with address/UB sanitizers
-      run: gcc-14 -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -std=c23 -Wall -pedantic -o rpn main.c calc.c stack.c io.c -lgmp
+      run: gcc-14 -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -std=c23 -Wall -pedantic -o rpn *.c -lgmp
 
     - name: run tests under sanitizers
       run: |

@@ -57,29 +57,40 @@ void value_clear(Value *v) {
 }
 
 /**
+ * Double the capacity of a heap array that has run full, with the byte size
+ * checked against overflow (initial capacity 8). Shared by the stack and
+ * register arrays.
+ * @param ptr The array pointer (may be NULL)
+ * @param cap Current capacity, updated to the new capacity
+ * @param elem_size Size of one element in bytes
+ * @return The grown array (realloc may have freed the old pointer)
+ */
+void *checked_grow(void *ptr, size_t *cap, size_t elem_size) {
+    size_t newcap, bytes;
+    if (*cap == 0)
+        newcap = 8;
+    else if (ckd_mul(&newcap, *cap, (size_t) 2))
+        rpn_fatal("array too large");
+    if (ckd_mul(&bytes, newcap, elem_size))
+        rpn_fatal("array too large");
+
+    void *grown = realloc(ptr, bytes);
+    if (!grown)
+        rpn_fatal("memory allocation error");
+    *cap = newcap;
+    return grown;
+}
+
+/**
  * Grow the backing array if it is full and return the slot for the next
- * value, doubling the capacity with the byte size checked against overflow.
- * Reallocating an array of Value only moves the handles; the limbs and
- * string buffers they point to are allocated separately and stay valid.
+ * value. Reallocating an array of Value only moves the handles; the limbs
+ * and string buffers they point to are allocated separately and stay valid.
  * @param s Stack to grow
  * @return Pointer to the free slot at the top of the stack
  */
 static Value *stack_slot(Stack s) {
-    if (s->size == s->cap) {
-        size_t newcap, bytes;
-        if (s->cap == 0)
-            newcap = 8;
-        else if (ckd_mul(&newcap, s->cap, (size_t) 2))
-            rpn_fatal("stack too large");
-        if (ckd_mul(&bytes, newcap, sizeof(Value)))
-            rpn_fatal("stack too large");
-
-        Value *grown = realloc(s->vals, bytes);
-        if (!grown)
-            rpn_fatal("memory allocation error");
-        s->vals = grown;
-        s->cap = newcap;
-    }
+    if (s->size == s->cap)
+        s->vals = checked_grow(s->vals, &s->cap, sizeof(Value));
 
     return &s->vals[s->size];
 }
@@ -149,6 +160,19 @@ Stack stack_pop(Stack s, Value *out) {
     s->size--;
     *out = s->vals[s->size];
     return s;
+}
+
+/**
+ * Move the top value of one stack onto another: pop it from `from` and push
+ * a copy onto `to`. Callers must guard `from` with stack_hasAtLeast.
+ * @param from Stack to take the value from
+ * @param to Stack to push the value onto
+ */
+void stack_move_top(Stack from, Stack to) {
+    Value v;
+    from = stack_pop(from, &v);
+    to = stack_push_value(to, v);
+    value_clear(&v);
 }
 
 /**
