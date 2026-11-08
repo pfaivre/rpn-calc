@@ -247,6 +247,11 @@ same "2 k 1 3 / X p"      "2"
 same "Z"                              # both error on empty stack
 same "X"
 
+# ===== IDENTICAL TO dc: ? at EOF (single-line stdin; dc's piped ? then sees
+# EOF because it slurps stdin upfront, and exits silently — same as rpn) =====
+same "?"                 ""    # bare ? at EOF: both exit 0, empty stdout
+same "1 p ? 2 p"         "1"   # ? at EOF exits silently, rest of the line dropped
+
 # ===== DELIBERATE DIVERGENCES from dc (each pinned, with dc's behavior noted) =====
 
 # rpn exits 1 when any command failed; dc always exits 0. Session continues in both.

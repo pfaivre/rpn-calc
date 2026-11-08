@@ -22,10 +22,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+/* fileno() is POSIX, not ISO C23: request it explicitly so it is declared
+ * under -std=c23 */
+#define _POSIX_C_SOURCE 200809L
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
+#include <unistd.h>
 #include <stdckdint.h>
 
 #include <gmp.h>
@@ -673,6 +678,25 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
             return s;
         }
         return _calc_exec_top(s, regs, depth);
+    }
+
+    // ?: read a line from the standard input, echo it (unless stdin is a
+    // terminal, which already echoes), and execute it as a new macro level;
+    // at EOF the program exits silently, as in dc
+    if (strcmp(command, "?") == 0) {
+        char *line = read_line();
+        if (!line) {
+            _calc_quit = 2;
+            _calc_exitAll = true;
+            return s;
+        }
+        if (!isatty(fileno(stdin))) {
+            fputs(line, stdout);
+            putchar('\n');
+        }
+        s = _calc_parse_depth(s, regs, line, depth + 1);
+        free(line);
+        return s;
     }
 
     // q: quit two levels of macro execution (the current macro and its

@@ -1017,6 +1017,25 @@ test "16 o 0.5 X p"  "1"
 test "2 k 1 3 / X p"  "2"
 test_error "X"  "stack underflow"
 
+# ===== ? (read a line from stdin at runtime) =====
+# ? reads one line from stdin, echoes it, and executes it as a new macro
+# level. At EOF it exits the program silently.
+
+test_lines $'1\n2 + p\n3'  '1 p ?\n2 + p\n'
+test_lines $'42\n42'  '? p\n42\n'
+test_lines $'2 p\n2\n1'  '[? 1 Q 9 p] x 1 p\n2 p\n'   # 1 Q unwinds the macro only
+test_lines $'q\n1'  '[?] x 1 p\nq\n'                  # q in the ?-line unwinds two levels
+test_lines "1"  '1 p ? 2 p\n'                       # EOF on ?: exits silently
+test_lines ""  '?\n'                                # bare ? at EOF
+
+# ? works in -e mode too (reads the remaining stdin)
+tests_run=$((tests_run + 1))
+r=$(printf '7 p\n' | ./rpn -e '? p' 2>/dev/null)
+if [ "$r" != $'7 p\n7\n7' ]; then
+    failures=$((failures + 1))
+    echo "FAIL -e '? p': expected '7 p\n7\n7', got '$r'"
+fi
+
 # ===== SUMMARY =====
 
 if [ "$failures" -eq 0 ]; then
