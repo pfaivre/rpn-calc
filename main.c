@@ -38,7 +38,7 @@ SOFTWARE.
 
 /**
  * Things to be done next:
- * TODO: Read a script file
+ * TODO: (nothing major left; the shell escape ! is deliberately not implemented)
  */
 
 
@@ -86,13 +86,35 @@ int main(int argc, char **argv) {
         s = calc_parse_expression(s, regs, expression);
         free(expression);
     }
-    // Otherwise read expressions from the standard input, one per line
-    else {
+
+    // Script files, in order, one line at a time; an unreadable file is an
+    // error but does not stop the session
+    for (int i = optind; i < argc; i++) {
+        if (calc_quit_requested())
+            break;
+        FILE *f = fopen(argv[i], "r");
+        if (!f) {
+            calc_report_errorf("could not open file %s", argv[i]);
+            continue;
+        }
+        char *line;
+        while ((line = read_line_stream(f)) != NULL) {
+            s = calc_parse(s, regs, line);
+            free(line);
+            if (calc_quit_requested())  // q at the top level exits the program
+                break;
+        }
+        fclose(f);
+    }
+
+    // Standard input, one line per line: after script files (as in dc), or
+    // when neither -e nor files were given
+    if ((optind < argc || !expression) && !calc_quit_requested()) {
         char *line;
         while ((line = read_line()) != NULL) {
             s = calc_parse(s, regs, line);
             free(line);
-            if (calc_quit_requested())  // q at the top level exits the program
+            if (calc_quit_requested())
                 break;
         }
     }

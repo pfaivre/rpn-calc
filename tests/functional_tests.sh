@@ -1038,6 +1038,63 @@ if [ "$r" != $'7 p\n7\n7' ]; then
     echo "FAIL -e '? p': expected '7 p\n7\n7', got '$r'"
 fi
 
+# ===== SCRIPT FILES (positional arguments) =====
+# Files run in order after -e; stdin is read after files (or when neither
+# -e nor files are given). stdin is redirected to /dev/null in these tests.
+
+tmpd=$(mktemp -d)
+printf '1 p\n2 2 + p\n' >"$tmpd/a.rpn"
+printf '5 p\n' >"$tmpd/b.rpn"
+printf '1 0 /\n7 p\n' >"$tmpd/bad.rpn"
+printf '8 p' >"$tmpd/nonl.rpn"                          # no trailing newline
+printf '1 p q\n2 p\n' >"$tmpd/q.rpn"
+printf '5 sc [lc p lc 1 - sc 0 lc >m] sm lmx\n' >"$tmpd/loop.rpn"
+
+# files run in order
+tests_run=$((tests_run + 1))
+r=$(./rpn "$tmpd/a.rpn" "$tmpd/b.rpn" </dev/null 2>/dev/null)
+[ "$r" = $'1\n4\n5' ] || { failures=$((failures+1)); echo "FAIL files in order: got '$r'"; }
+
+# -e runs before files
+tests_run=$((tests_run + 1))
+r=$(./rpn -e '9 p' "$tmpd/a.rpn" </dev/null 2>/dev/null)
+[ "$r" = $'9\n1\n4' ] || { failures=$((failures+1)); echo "FAIL -e before files: got '$r'"; }
+
+# stdin is read after files
+tests_run=$((tests_run + 1))
+r=$(printf '7 p\n' | ./rpn "$tmpd/a.rpn" 2>/dev/null)
+[ "$r" = $'1\n4\n7' ] || { failures=$((failures+1)); echo "FAIL stdin after files: got '$r'"; }
+
+# -e alone does not read stdin
+tests_run=$((tests_run + 1))
+r=$(printf '7 p\n' | ./rpn -e '1 p' 2>/dev/null)
+[ "$r" = "1" ] || { failures=$((failures+1)); echo "FAIL -e no stdin: got '$r'"; }
+
+# a missing file is an error (exit 1) but later files still run
+tests_run=$((tests_run + 1))
+r=$(./rpn "$tmpd/nope" "$tmpd/b.rpn" </dev/null 2>"$tmpd/err"); code=$?
+if [ "$r" != "5" ] || [ "$code" != "1" ] || ! grep -q "could not open file" "$tmpd/err"; then
+    failures=$((failures+1)); echo "FAIL missing file: out='$r' code=$code err='$(cat "$tmpd/err")'"
+fi
+
+# an error inside a file does not stop the session
+tests_run=$((tests_run + 1))
+r=$(./rpn "$tmpd/bad.rpn" "$tmpd/b.rpn" </dev/null 2>/dev/null); code=$?
+[ "$r" = $'7\n5' ] && [ "$code" = "1" ] || { failures=$((failures+1)); echo "FAIL error in file: out='$r' code=$code"; }
+
+# no trailing newline, loops in files, q in a file exits
+tests_run=$((tests_run + 1))
+r=$(./rpn "$tmpd/nonl.rpn" </dev/null 2>/dev/null)
+[ "$r" = "8" ] || { failures=$((failures+1)); echo "FAIL no trailing newline: got '$r'"; }
+tests_run=$((tests_run + 1))
+r=$(./rpn "$tmpd/loop.rpn" </dev/null 2>/dev/null)
+[ "$r" = $'5\n4\n3\n2\n1' ] || { failures=$((failures+1)); echo "FAIL loop in file: got '$r'"; }
+tests_run=$((tests_run + 1))
+r=$(./rpn "$tmpd/q.rpn" </dev/null 2>/dev/null)
+[ "$r" = "1" ] || { failures=$((failures+1)); echo "FAIL q in file: got '$r'"; }
+
+rm -rf "$tmpd"
+
 # ===== SUMMARY =====
 
 if [ "$failures" -eq 0 ]; then

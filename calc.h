@@ -35,6 +35,10 @@ SOFTWARE.
 
 [[nodiscard]] bool calc_had_error();
 
+/** Report an error outside the parser (e.g. an unreadable script file):
+ * prints "rpn: ..." to stderr and sets the error flag for the exit status */
+void calc_report_errorf(const char *fmt, ...);
+
 /** Whether q asked to leave the top-level input (main then stops and exits) */
 [[nodiscard]] bool calc_quit_requested();
 

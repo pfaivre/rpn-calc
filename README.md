@@ -4,7 +4,7 @@ A humble dc clone
 ## Synopsis
 ```sh
 rpn [-V] [--version] [-h] [--help]
-    [-e scriptexpression] [--expression=scriptexpression]
+    [-e scriptexpression] [--expression=scriptexpression] [file...]
 ```
 
 ## Description
@@ -37,11 +37,21 @@ Print a usage message briefly summarizing these command-line options, then exit.
 -e, --expression=script
 ```
 Add the commands in script to the set of commands to be run. Multiple `-e`
-options are concatenated.
+options are concatenated. `-e` expressions run before any script files.
+
+```sh
+file...
+```
+Read and execute each script file, in order, one line at a time (like standard
+input lines; the stack, registers, scale and bases persist across files). An
+unreadable file is an error but does not stop the session. After script files,
+standard input is read (as in dc); with `-e` and no files, standard input is
+not read.
 
 ## Input
-Without `-e`, expressions are read from the standard input, one per line; the
-stack persists across lines. Spaces, tabs and newlines separate tokens, and
+Without `-e` or files, expressions are read from the standard input, one per
+line; the stack persists across lines. With script files, they are read first
+(in order) and the standard input follows them. Spaces, tabs and newlines separate tokens, and
 spaces may be omitted between tokens (`2 3*4+p`). Negative numbers are written
 with an underscore prefix (`_5`). Numbers may have a decimal point (`1.5`,
 `.5`, `1.`); a second `.` starts a new token, so `1..2` is read as `1.` then
@@ -222,9 +232,7 @@ rpn deliberately differs from dc in the following ways:
   up with the same error.
 
 ## Limitations
-This program is much more basic than dc and currently lacks some notable features like:
-- script files: positional arguments are not read as scripts, only `-e` and stdin work
-- the shell escape (`!`) is not implemented
+This program lacks the shell escape (`!`), which is deliberately not implemented.
 
 ## License
 Copyright 2016-2026 Pierre Faivre. This is free software, and may be redistributed

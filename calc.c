@@ -90,6 +90,20 @@ bool calc_had_error() {
 }
 
 /**
+ * Report an error outside the parser (e.g. an unreadable script file):
+ * prints "rpn: ..." to stderr and sets the error flag for the exit status
+ */
+void calc_report_errorf(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    fputs("rpn: ", stderr);
+    vfprintf(stderr, fmt, ap);
+    fputc('\n', stderr);
+    va_end(ap);
+    _calc_errorFlag = true;
+}
+
+/**
  * Whether q asked to leave the top-level input: main stops reading lines
  * and exits when this is true after a top-level parse
  * @return true if q/Q unwound past the top level
