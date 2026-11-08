@@ -95,7 +95,7 @@ $ ./rpn
 
 `f` Prints the entire stack without modifying it.
 
-`x` Pops the top value of the stack and, if it is a string, executes its contents as commands on the same stack (macros can nest: `[[2 3 + p] x] x` prints `5`). A number is left untouched.
+`x` If the top value is a string, pops it and executes its contents as commands on the same stack (macros can nest: `[[2 3 + p] x] x` prints `5`). A number is left untouched, not popped.
 
 ## Compatibility with dc
 For the commands listed above, rpn behaves like dc (checked against GNU dc 1.5.2):
