@@ -26,7 +26,6 @@ SOFTWARE.
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
-#include <ctype.h>
 #include <stdckdint.h>
 
 #include <gmp.h>
@@ -189,16 +188,54 @@ static bool _calc_index_mpz(const Value *v, mpz_t idx) {
 }
 
 /**
- * Push the number 0 onto the stack (the load of an empty register or of a
- * never-stored array cell)
+ * Pop the top value as a base (the i and o commands): its integer part must
+ * be a number in 2..16. On error the value stays on the stack.
  * @param s Stack to modify
- * @return The stack with 0 on top
+ * @param slot The base variable to set on success
+ * @param low_err Error message when the value is not a number or below 2
+ * @param high_err Error message when the value exceeds 16
+ * @return The stack after the command
  */
-static Stack _calc_push_zero(Stack s) {
-    mpz_t zero;
-    mpz_init_set_ui(zero, 0);
-    s = stack_push_num(s, zero);
-    mpz_clear(zero);
+static Stack _calc_pop_base(Stack s, long *slot, const char *low_err, const char *high_err) {
+    if (!stack_hasAtLeast(s, 1)) {
+        _calc_error("stack underflow");
+        return s;
+    }
+    mpz_t ip;
+    mpz_init(ip);
+    const char *err = NULL;
+    if (!_calc_int_part_into(stack_top(s), ip))
+        err = low_err;
+    else if (!mpz_fits_slong_p(ip) || mpz_cmp_ui(ip, 2) < 0)
+        err = low_err;
+    else if (mpz_cmp_ui(ip, 16) > 0)
+        err = high_err;
+    if (err) {
+        _calc_error(err);
+        mpz_clear(ip);
+        return s;
+    }
+    *slot = mpz_get_si(ip);
+    mpz_clear(ip);
+    Value a;
+    s = stack_pop(s, &a);
+    value_clear(&a);
+    return s;
+}
+
+/**
+ * Push a long as a number value onto the stack (0 for the load of an empty
+ * register or of a never-stored array cell, the scale factor K, the bases
+ * I and O)
+ * @param s Stack to modify
+ * @param v The value to push
+ * @return The stack with v on top
+ */
+static Stack _calc_push_long(Stack s, long v) {
+    mpz_t m;
+    mpz_init_set_si(m, v);
+    s = stack_push_num(s, m);
+    mpz_clear(m);
     return s;
 }
 
@@ -231,7 +268,7 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
             Stack rs = register_stack(regs, name);
             if (stack_hasAtLeast(rs, 1))
                 return stack_push_value(s, *stack_top(rs));
-            return _calc_push_zero(s);
+            return _calc_push_long(s, 0);
         }
         // S: pop the top of the main stack and push it onto the register's
         // own stack
@@ -296,7 +333,7 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
             if (cell)
                 s = stack_push_value(s, *cell);
             else
-                s = _calc_push_zero(s);
+                s = _calc_push_long(s, 0);
             value_clear(&index);
             return s;
         }
@@ -379,7 +416,7 @@ static Stack _calc_conditional(Stack s, Registers regs, const char *op, unsigned
     if (stack_hasAtLeast(rs, 1))
         s = stack_push_value(s, *stack_top(rs));
     else
-        s = _calc_push_zero(s);
+        s = _calc_push_long(s, 0);
     return _calc_exec_top(s, regs, depth);
 }
 
@@ -393,10 +430,10 @@ static Stack _calc_conditional(Stack s, Registers regs, const char *op, unsigned
  * @return The top of the stack after performing the command
  */
 static Stack _calc_proceed(Stack s, Registers regs, const char* command, int depth) {
-    // A number (integer or decimal: 12, _3, 1.5, .5, 1.; digits 0-9A-F are
-    // read in the current input base)
-    if (isdigit((unsigned char) command[0]) || command[0] == '_'
-        || command[0] == '.' || (command[0] >= 'A' && command[0] <= 'F')) {
+    // A number (integer or decimal: 12, _3, 1.5, .5, 1.; digit chars 0-9A-F
+    // are read in the current input base)
+    if (number_digit_value(command[0]) >= 0 || command[0] == '_'
+        || command[0] == '.') {
         Value v;
         if (!number_parse(command, _calc_in_base, &v)) {
             _calc_error("scale too large");
@@ -497,88 +534,28 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
     }
 
     // K: push the current scale factor
-    if (strcmp(command, "K") == 0) {
-        mpz_t ks;
-        mpz_init_set_si(ks, _calc_scale);
-        s = stack_push_num(s, ks);
-        mpz_clear(ks);
-        return s;
-    }
+    if (strcmp(command, "K") == 0)
+        return _calc_push_long(s, _calc_scale);
 
     // i: pop the input base (the integer part of the top value, 2..16)
-    if (strcmp(command, "i") == 0) {
-        if (!stack_hasAtLeast(s, 1)) {
-            _calc_error("stack underflow");
-            return s;
-        }
-        if (stack_top(s)->kind != VAL_NUM) {
-            _calc_error("input base must be a number between 2 and 16 (inclusive)");
-            return s;
-        }
-        mpz_t ip;
-        mpz_init(ip);
-        number_int_part(stack_top(s), ip);
-        if (!mpz_fits_slong_p(ip) || mpz_cmp_ui(ip, 2) < 0 || mpz_cmp_ui(ip, 16) > 0) {
-            _calc_error("input base must be a number between 2 and 16 (inclusive)");
-            mpz_clear(ip);
-            return s;
-        }
-        _calc_in_base = mpz_get_si(ip);
-        mpz_clear(ip);
-        Value a;
-        s = stack_pop(s, &a);
-        value_clear(&a);
-        return s;
-    }
+    if (strcmp(command, "i") == 0)
+        return _calc_pop_base(s, &_calc_in_base,
+                              "input base must be a number between 2 and 16 (inclusive)",
+                              "input base must be a number between 2 and 16 (inclusive)");
 
     // o: pop the output base (the integer part of the top value, 2..16)
-    if (strcmp(command, "o") == 0) {
-        if (!stack_hasAtLeast(s, 1)) {
-            _calc_error("stack underflow");
-            return s;
-        }
-        if (stack_top(s)->kind != VAL_NUM) {
-            _calc_error("output base must be a number greater than 1");
-            return s;
-        }
-        mpz_t ip;
-        mpz_init(ip);
-        number_int_part(stack_top(s), ip);
-        if (!mpz_fits_slong_p(ip) || mpz_cmp_ui(ip, 2) < 0) {
-            _calc_error("output base must be a number greater than 1");
-            mpz_clear(ip);
-            return s;
-        }
-        if (mpz_cmp_ui(ip, 16) > 0) {
-            _calc_error("output base must be a number between 2 and 16 (inclusive)");
-            mpz_clear(ip);
-            return s;
-        }
-        _calc_out_base = mpz_get_si(ip);
-        mpz_clear(ip);
-        Value a;
-        s = stack_pop(s, &a);
-        value_clear(&a);
-        return s;
-    }
+    if (strcmp(command, "o") == 0)
+        return _calc_pop_base(s, &_calc_out_base,
+                              "output base must be a number greater than 1",
+                              "output base must be a number between 2 and 16 (inclusive)");
 
     // I: push the current input base
-    if (strcmp(command, "I") == 0) {
-        mpz_t ib;
-        mpz_init_set_si(ib, _calc_in_base);
-        s = stack_push_num(s, ib);
-        mpz_clear(ib);
-        return s;
-    }
+    if (strcmp(command, "I") == 0)
+        return _calc_push_long(s, _calc_in_base);
 
     // O: push the current output base
-    if (strcmp(command, "O") == 0) {
-        mpz_t ob;
-        mpz_init_set_si(ob, _calc_out_base);
-        s = stack_push_num(s, ob);
-        mpz_clear(ob);
-        return s;
-    }
+    if (strcmp(command, "O") == 0)
+        return _calc_push_long(s, _calc_out_base);
 
     // Clear the stack
     if (strcmp(command, "c") == 0)
@@ -715,10 +692,9 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
 static bool _calc_token_continues(const char *token, size_t len, char c) {
     // A digit char (0-9 or hex letter A-F) continues a number (possibly
     // negative: _ prefix, or after a .)
-    if ((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F'))
+    if (number_digit_value(c) >= 0)
         return len > 0 && (token[len-1] == '_' || token[len-1] == '.'
-                           || (token[len-1] >= '0' && token[len-1] <= '9')
-                           || (token[len-1] >= 'A' && token[len-1] <= 'F'));
+                           || number_digit_value(token[len-1]) >= 0);
 
     // A '.' continues a number token that does not contain one yet: 1.5, .5
     // and 1. are single tokens, and a second '.' starts a new token
@@ -727,8 +703,7 @@ static bool _calc_token_continues(const char *token, size_t len, char c) {
         if (strchr(token, '.') != NULL)
             return false;
         for (size_t i = 0; i < len; i++)
-            if (token[i] != '_' && !((token[i] >= '0' && token[i] <= '9')
-                                     || (token[i] >= 'A' && token[i] <= 'F')))
+            if (token[i] != '_' && number_digit_value(token[i]) < 0)
                 return false;
         return true;
     }

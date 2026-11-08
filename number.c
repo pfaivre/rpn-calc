@@ -69,11 +69,12 @@ static void num_at_scale(mpz_t r, const Value *v, long s) {
     }
 }
 
-/** The value of a digit char: 0-9 for '0'-'9', 10-15 for 'A'-'F' */
-static int digit_value(char c) {
+int number_digit_value(char c) {
     if (c >= '0' && c <= '9')
         return c - '0';
-    return c - 'A' + 10;
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    return -1;
 }
 
 /** Uppercase the digits of a base > 10 number (mpz_get_str yields a-z) */
@@ -105,7 +106,7 @@ static void acc_digits(mpz_t r, const char *digits, size_t len, long base) {
         size_t n = len - i < k ? len - i : k;
         unsigned long chunk = 0, bm = 1;  // chunk < b^n, bm = b^n: both fit
         for (size_t t = 0; t < n; t++) {
-            chunk = chunk * b + (unsigned long) digit_value(digits[i + t]);
+            chunk = chunk * b + (unsigned long) number_digit_value(digits[i + t]);
             bm *= b;
         }
         mpz_mul_ui(r, r, bm);
@@ -121,7 +122,7 @@ static void acc_digits(mpz_t r, const char *digits, size_t len, long base) {
 static void set_in_base(mpz_t r, const char *digits, size_t len, long base) {
     bool below = true;
     for (size_t i = 0; i < len; i++)
-        if (digit_value(digits[i]) >= base) {
+        if (number_digit_value(digits[i]) >= base) {
             below = false;
             break;
         }
@@ -192,7 +193,23 @@ bool number_parse(const char *token, long base, Value *out) {
     return true;
 }
 
+/** Print x in the given base as uppercase digits, zero-padded on the left to
+ * at least min_width digits (mpz_get_str yields a-z for bases > 10) */
+static void print_base_digits(const mpz_t x, int base, long min_width) {
+    size_t bufsize = mpz_sizeinbase(x, base) + 2;  // sign + NUL
+    char *digits = malloc(bufsize);
+    if (!digits)
+        rpn_fatal("memory allocation error");
+    mpz_get_str(digits, base, x);
+    uppercase_digits(digits);
+    for (long pad = min_width - (long) strlen(digits); pad > 0; pad--)
+        putchar('0');
+    fputs(digits, stdout);
+    free(digits);
+}
+
 void number_print(const Value *v, bool newline, long base) {
+    const int b = (int) base;  // 2..16, validated at the i/o boundary
     if (mpz_sgn(v->num) == 0) {
         fputs("0", stdout);  // zero prints as "0", whatever its scale or sign
     } else {
@@ -215,42 +232,24 @@ void number_print(const Value *v, bool newline, long base) {
         if (neg)
             putchar('-');
 
-        // Integer part in the output base (mpz_get_str yields 0-9A-F)
-        size_t ibuf = mpz_sizeinbase(ip, (int) base) + 2;
-        char *idigits = malloc(ibuf);
-        if (!idigits)
-            rpn_fatal("memory allocation error");
-        mpz_get_str(idigits, (int) base, ip);
-        uppercase_digits(idigits);
-        bool has_int = mpz_sgn(ip) > 0;  // no leading zero before the point
-        if (has_int)
-            fputs(idigits, stdout);
-        free(idigits);
+        // Integer part in the output base (no leading zero before the point)
+        if (v->scale == 0 || mpz_sgn(ip) > 0)
+            print_base_digits(ip, b, 1);
 
         // Fraction: N = ceil(log_base(10^scale)) digits
         if (v->scale > 0) {
             mpz_t p10;
             mpz_init(p10);
             pow10(p10, v->scale);
-            long n = base == 10 ? v->scale : (long) mpz_sizeinbase(p10, (int) base);
+            long n = b == 10 ? v->scale : (long) mpz_sizeinbase(p10, b);
             mpz_t pb, frac;
             mpz_init(pb);
             mpz_init(frac);
             mpz_ui_pow_ui(pb, (unsigned long) base, (unsigned long) n);
             mpz_mul(frac, rem, pb);
             mpz_tdiv_q(frac, frac, p10);
-            size_t fbuf = mpz_sizeinbase(frac, (int) base) + 2;
-            char *fdigits = malloc(fbuf);
-            if (!fdigits)
-                rpn_fatal("memory allocation error");
-            mpz_get_str(fdigits, (int) base, frac);
-            uppercase_digits(fdigits);
-            size_t flen = strlen(fdigits);
             putchar('.');
-            for (long pad = n - (long) flen; pad > 0; pad--)
-                putchar('0');
-            fputs(fdigits, stdout);
-            free(fdigits);
+            print_base_digits(frac, b, n);
             mpz_clear(p10);
             mpz_clear(pb);
             mpz_clear(frac);

@@ -38,6 +38,14 @@ SOFTWARE.
 #define MAX_SCALE 1000000L
 
 /**
+ * The value of a digit char: 0-9 for '0'-'9', 10-15 for 'A'-'F' (uppercase;
+ * lowercase letters are not digit chars)
+ * @param c A character
+ * @return The digit value, or -1 when c is not a digit char
+ */
+int number_digit_value(char c);
+
+/**
  * Parse a numeric token (optional leading _, digit chars 0-9A-F, at most one
  * '.') into a number value, reading the digits in the given input base.
  * Numbers are stored base 10 internally (value = num / 10^scale): the
