@@ -192,6 +192,10 @@ same "16 o 2 k 255 v p"   "F.F5"
 same "16 o 2 k 255.5 p"   "FF.8"
 same "16 o 2 k 0.1 0.1 * p"  ".02"
 same "16 i _F.F p"        "-15.9"
+same "15 o 1 k 1 2 / p"   ".7"       # fraction digits: exact ceil(log_base(10^scale))
+same "3 o 7 k 1 2 / p"    ".111111111111111"
+same "11 o 2 k 1 2 / p"   ".55"
+same "7 o 5 k 1 3 / p"    ".222221"
 same "10 o 16 o 255 p 10 o 255 p"  $'FF\n255'
 same "16 i FF 10 o p"     "FF"
 same "16 i FF sa la p"    "255"

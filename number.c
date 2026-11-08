@@ -242,6 +242,18 @@ void number_print(const Value *v, bool newline, long base) {
             mpz_init(p10);
             pow10(p10, v->scale);
             long n = b == 10 ? v->scale : (long) mpz_sizeinbase(p10, b);
+            if (b != 10) {
+                // mpz_sizeinbase is exact or one too big for non-power-of-2
+                // bases: reduce n to the smallest count with base^n >= 10^scale
+                mpz_t bl;  // bl = base^(n-1)
+                mpz_init(bl);
+                mpz_ui_pow_ui(bl, (unsigned long) base, (unsigned long) (n - 1));
+                while (n > 1 && mpz_cmp(bl, p10) >= 0) {
+                    mpz_tdiv_q_ui(bl, bl, (unsigned long) base);
+                    n--;
+                }
+                mpz_clear(bl);
+            }
             mpz_t pb, frac;
             mpz_init(pb);
             mpz_init(frac);

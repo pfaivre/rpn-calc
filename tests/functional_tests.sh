@@ -920,6 +920,15 @@ test "16 o 2 k 255.5 p"  "FF.8"
 test "16 o 2 k 0.1 0.1 * p"  ".02"
 test "16 i _F.F p"  "-15.9"
 
+# Fraction digit count is exactly ceil(log_base(10^scale)), also in
+# non-power-of-2 bases (mpz_sizeinbase may report one too many)
+test "15 o 1 k 1 2 / p"  ".7"
+test "3 o 7 k 1 2 / p"   ".111111111111111"
+test "11 o 2 k 1 2 / p"  ".55"
+test "5 o 4 k 1 2 / p"   ".222222"
+test "7 o 5 k 1 3 / p"   ".222221"
+test "6 o 9 k 1 7 / p"   ".050505050503"
+
 # Bases switch back and persist across lines
 test "10 o 16 o 255 p 10 o 255 p"  $'FF\n255'
 test_lines "255"  '16 i FF p\n'
