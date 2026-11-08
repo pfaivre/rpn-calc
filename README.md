@@ -87,19 +87,22 @@ $ dc examples/demo.rpn
 ```
 
 ## Commands
+Commands are single tokens; spaces between them may be omitted (`2 3*4+p`). The
+sections below group them by purpose.
+
+### Strings and macros
 `[...]` Pushes a string literal onto the stack. The outer brackets are not part of the string; inner bracket pairs are kept, so nesting works (`[[a]b]` pushes `[a]b`). Spaces, `#` and digits are allowed inside, and the literal may be written without separating spaces (`2[ab]p`). A literal not closed on the same line is an error.
 
-`p` Prints the top value of the stack. A string is printed as-is.
+`x` If the top value is a string, pops it and executes its contents as commands on the same stack (macros can nest: `[[2 3 + p] x] x` prints `5`). A number is left untouched, not popped.
 
-`n` Pops the top value of the stack and prints it without a trailing newline. A string is printed as-is.
-
-`P` Pops the top value of the stack and prints it without a trailing newline. A string is printed as-is; a number is printed as a string of bytes, most significant byte of its absolute value first (so `72 105 256 * + P` prints `iH`).
-
+### Arithmetic
 `+` Pops two values off the stack, adds them and pushes the result on the stack.
 
 `-` Pops two values off the stack, subtracts the first popped from the second popped and pushes the result on the stack.
 
 `*` Pops two values off the stack, multiplies them and pushes the result on the stack.
+
+`+` and `-` push the result at scale `max` of the two operand scales; `*` pushes `a*b` at scale `min(scale(a)+scale(b), max(scale(a), scale(b), k))`.
 
 `/` Pops two values off the stack, divides the second popped by the first popped and pushes the quotient on the stack, truncated toward zero with exactly `k` fractional digits.
 
@@ -113,6 +116,9 @@ $ dc examples/demo.rpn
 
 `|` Pops three values — the modulus (top), the exponent, and the base — and pushes `base^exponent mod modulus`. The base and exponent are truncated to their integer parts; the modulus is used with its scale. The result scale is `max(scale(base), scale(modulus))`, and arbitrarily large exponents are supported. A zero modulus reports `remainder by zero`; a negative exponent reports `exponent must be non-negative`.
 
+### Scale and bases
+Numbers are stored in base 10 internally: the input base converts digits at parse time (a fraction of `f` digits is truncated to `f` decimal digits), and the output base converts at print time (the integer part in that base; the fraction with `ceil(log_base(10^scale))` digits). `P` always prints bytes of the integer part, whatever the output base.
+
 `k` Pops the top value and sets the scale factor to its integer part; it must be a nonnegative number not exceeding 1,000,000, otherwise it is an error and the value stays on the stack.
 
 `K` Pushes the current scale factor.
@@ -125,27 +131,33 @@ $ dc examples/demo.rpn
 
 `O` Pushes the current output base.
 
-`z` Pushes the depth of the stack (without popping).
-
-`Z` Pops the top value and pushes its length: the number of decimal digits of a number (the sign and the point are not counted), or the number of characters of a string.
-
-`X` Pops the top value and pushes its scale: the number of fractional digits of a number, or 0 for a string.
-
-`?` Reads one line from the standard input, echoes it (unless the input is a terminal, which already echoes), and executes it as a new macro level (so `q` in such a line unwinds it and its caller). At EOF the program exits silently.
-
-Numbers are stored in base 10 internally: the input base converts digits at parse time (a fraction of `f` digits is truncated to `f` decimal digits), and the output base converts at print time (the integer part in that base; the fraction with `ceil(log_base(10^scale))` digits). `P` always prints bytes of the integer part, whatever the output base.
-
-`+` and `-` push the result at scale `max` of the two operand scales; `*` pushes `a*b` at scale `min(scale(a)+scale(b), max(scale(a), scale(b), k))`.
-
+### Stack operations
 `d` Duplicates the top value of the stack.
 
 `r` Swaps the two top values of the stack. With fewer than two values on the stack it does nothing (as in dc).
 
 `c` Clears the stack.
 
+`z` Pushes the depth of the stack (without popping).
+
+`Z` Pops the top value and pushes its length: the number of decimal digits of a number (the sign and the point are not counted), or the number of characters of a string.
+
+`X` Pops the top value and pushes its scale: the number of fractional digits of a number, or 0 for a string.
+
+### Printing
+`p` Prints the top value of the stack. A string is printed as-is.
+
+`n` Pops the top value of the stack and prints it without a trailing newline. A string is printed as-is.
+
+`P` Pops the top value of the stack and prints it without a trailing newline. A string is printed as-is; a number is printed as a string of bytes, most significant byte of its absolute value first (so `72 105 256 * + P` prints `iH`).
+
 `f` Prints the entire stack without modifying it.
 
-`x` If the top value is a string, pops it and executes its contents as commands on the same stack (macros can nest: `[[2 3 + p] x] x` prints `5`). A number is left untouched, not popped.
+### Input
+`?` Reads one line from the standard input, echoes it (unless the input is a terminal, which already echoes), and executes it as a new macro level (so `q` in such a line unwinds it and its caller). At EOF the program exits silently.
+
+### Registers
+Registers are named by a single character (256 of them, case-sensitive, digits allowed) and persist across input lines. A register's value stack (`s`/`l`/`S`/`L`) and its array (`:`/`;`) are independent.
 
 `s r` Pops the top value of the main stack and stores it in register `r`, replacing its previous content. The register name is the next character, written with or without a separating space (`sa` and `s a` both name register `a`; `sA2` names register `A` and then pushes `2`).
 
@@ -159,7 +171,8 @@ Numbers are stored in base 10 internally: the input base converts digits at pars
 
 `; r` Pops the index off the main stack and pushes the value stored at that index in register `r`'s array, or 0 if the index was never stored.
 
-Registers are named by a single character (256 of them, case-sensitive, digits allowed) and persist across input lines. A register's value stack (`s`/`l`/`S`/`L`) and its array (`:`/`;`) are independent.
+### Conditionals
+The comparison is numeric only: a string operand is an error and the operands stay on the stack. When the register fires, it is executed like `l r x` (an empty register loads 0, and `x` on a number does nothing). With registers, `x` and conditionals, loops are possible: `5 sc [lc p lc 1 - sc 0 lc >m] sm lmx` prints 5 4 3 2 1.
 
 `> r` Pops two values and compares them as numbers, executing register `r` as a macro (without consuming it) if the original top of stack is greater than the second. Thus `1 2 >a` invokes register `a`, while `2 1 >a` does not.
 
@@ -169,8 +182,7 @@ Registers are named by a single character (256 of them, case-sensitive, digits a
 
 `!> r`, `!< r`, `!= r` Same, but negated: fire when the original top is respectively less than or equal, greater than or equal, or not equal to the second.
 
-The comparison is numeric only: a string operand is an error and the operands stay on the stack. When the register fires, it is executed like `l r x` (an empty register loads 0, and `x` on a number does nothing). With registers, `x` and conditionals, loops are possible: `5 sc [lc p lc 1 - sc 0 lc >m] sm lmx` prints 5 4 3 2 1.
-
+### Control flow
 `q` Quits two levels of macro execution (the current macro and the one that invoked it), abandoning the rest of their input. Issued at the top level, or in a macro called directly from the top level, it exits the program (like dc). A numeric top of stack is not popped.
 
 `Q` Pops a count N and quits N levels of macro execution, abandoning the rest of their input. It never exits the program: N larger than the current macro depth is an error (the count is popped, but the available levels are still quit, as in dc), and a non-number, negative or too-large count is an error with the operand kept.
@@ -254,6 +266,29 @@ rpn deliberately differs from dc in the following ways:
   would exceed 32 MiB, is rejected with `exponent too large in raise`, while
   a huge negative exponent is computed exactly (0, 1 or _1), where dc gives
   up with the same error.
+
+## Performance
+`make bench` (or `bash tests/bench.sh`, needs dc installed) times rpn against
+GNU dc on compute-heavy expressions, best of `BENCH_N` runs (default 3). Indicative
+results on one machine (Intel(R) Core(TM) i5-10600KF CPU @ 4.10GHz), wall time in ms:
+
+| Benchmark | rpn | dc 1.5.2 |
+|---|---|---|
+| `2 1000000 ^` | 16 | 1401 |
+| `2 3000000 ^` | 61 | 8411 |
+| parse a 100k-digit literal | 7 | 16966 |
+| 10k hex digits in and out | 1 | 2464 |
+| `v` at k=500 | 1 | 7 |
+| sum 1..100000 via macro loop | 2 | 57 |
+| countdown 100000 via loop | 1 | 41 |
+| factorial 900 (recursive loop) | 2 | 5 |
+| `|` modpow, 60-digit exponent | 1 | 1 |
+| division at k=500, big multiply | 1 | 1 |
+
+rpn is much faster on parsing (GMP `mpz_set_str` instead of digit-by-digit
+accumulation), big `^`, and calculator loops (array-backed stack vs a linked
+list); `|` is at parity since both use GMP's modular exponentiation. Small
+operations are dominated by process startup (~1 ms) for both.
 
 ## Security
 

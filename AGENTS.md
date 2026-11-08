@@ -82,6 +82,7 @@ There are no unit tests in the traditional sense. Testing is done through:
 3. **Test**: Run `make test` for functional testing
 4. **Run**: Execute `./rpn` with appropriate arguments
 5. **Memory check**: Run valgrind to check for memory issues. Example: `valgrind ./rpn -e "12 _3 4 ^ + 11 / v 22 - f"`
+6. **Benchmark**: `make bench` times rpn against dc (needs dc installed; `BENCH_N=1` for a quick run)
 
 ## Review principles (thermos)
 
