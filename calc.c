@@ -557,6 +557,40 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
     if (strcmp(command, "O") == 0)
         return _calc_push_long(s, _calc_out_base);
 
+    // z: push the depth of the stack (without popping)
+    if (strcmp(command, "z") == 0)
+        return _calc_push_long(s, (long) s->size);
+
+    // Z: pop the top value and push its length: the number of decimal digits
+    // of a number (not counting the sign), or the number of characters of a
+    // string
+    if (strcmp(command, "Z") == 0) {
+        if (!stack_hasAtLeast(s, 1)) {
+            _calc_error("stack underflow");
+            return s;
+        }
+        Value a;
+        s = stack_pop(s, &a);
+        long len = a.kind == VAL_STR ? (long) strlen(a.str)
+                                     : (long) mpz_sizeinbase(a.num, 10);  // >= 1, even for 0
+        value_clear(&a);
+        return _calc_push_long(s, len);
+    }
+
+    // X: pop the top value and push its scale (the number of fractional
+    // digits; 0 for a string)
+    if (strcmp(command, "X") == 0) {
+        if (!stack_hasAtLeast(s, 1)) {
+            _calc_error("stack underflow");
+            return s;
+        }
+        Value a;
+        s = stack_pop(s, &a);
+        long scale = a.kind == VAL_NUM ? a.scale : 0;
+        value_clear(&a);
+        return _calc_push_long(s, scale);
+    }
+
     // Clear the stack
     if (strcmp(command, "c") == 0)
         return stack_clear(s);
