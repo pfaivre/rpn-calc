@@ -343,7 +343,7 @@ static Stack _calc_proceed(Stack s, const char* command) {
             _calc_error("stack underflow");
             return s;
         }
-        return stack_push_value(s, stack_top(s));
+        return stack_push_value(s, *stack_top(s));
     }
 
     // Swap the top two values of the stack (a no-op with fewer than two

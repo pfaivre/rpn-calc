@@ -302,6 +302,12 @@ test "3 d + f"  "6"
 # 7+7+7=21
 test "7 d d + + p"  "21"
 
+# d at a capacity boundary: 8 pushes fill the initial capacity (8), so the
+# duplicate forces a realloc of the backing array while copying the top
+# (regression test for a use-after-free of the mpz handle in stack_push_value)
+test_stack "1 2 3 4 5 6 7 8 d f"  "8" "8" "7" "6" "5" "4" "3" "2" "1"
+test_stack "1 2 3 4 5 6 7 8 [s] 9 d f"  "9" "9" "s" "8" "7" "6" "5" "4" "3" "2" "1"
+
 # 5-2=3 with swapped operands: 2-5=-3
 test "5 2 r - f"  "-3"
 

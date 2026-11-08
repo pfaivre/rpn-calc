@@ -72,8 +72,11 @@ void value_clear(Value *v);
 
 [[nodiscard]] Stack stack_push_str(Stack, const char *);
 
-/** Push a deep copy of a value of either kind */
-[[nodiscard]] Stack stack_push_value(Stack, const Value *);
+/** Push a deep copy of a value of either kind. The value is taken by value
+ * so a caller may safely pass *stack_top(s): the struct copy happens before
+ * the backing array grows, and only the separately-allocated limbs/buffers
+ * are shared with the copy. */
+[[nodiscard]] Stack stack_push_value(Stack, Value);
 
 [[nodiscard]] Stack stack_pop(Stack, Value *);
 

@@ -120,15 +120,19 @@ Stack stack_push_str(Stack s, const char *str) {
 }
 
 /**
- * Append a deep copy of a value at the top of a stack
+ * Append a deep copy of a value at the top of a stack. The value is taken by
+ * value on purpose: passing *stack_top(s) would alias the backing array,
+ * which stack_slot() may realloc (freeing the old block) before the copy,
+ * leaving v->num dangling. A by-value parameter copies the handle at the
+ * call site, before any realloc.
  * @param s Stack to be completed
  * @param v Value to copy (number or string)
  * @return the same stack, with the new value on top
  */
-Stack stack_push_value(Stack s, const Value *v) {
-    if (v->kind == VAL_NUM)
-        return stack_push_num(s, v->num);
-    return stack_push_str(s, v->str);
+Stack stack_push_value(Stack s, Value v) {
+    if (v.kind == VAL_NUM)
+        return stack_push_num(s, v.num);
+    return stack_push_str(s, v.str);
 }
 
 /**
