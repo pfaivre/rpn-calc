@@ -23,6 +23,7 @@ SOFTWARE.
 */
 
 #include <stdlib.h>
+#include <string.h>
 #include <stdckdint.h>
 
 #include <gmp.h>
@@ -45,47 +46,101 @@ Stack stack_init() {
 }
 
 /**
- * Append a value at the top of a stack, growing the backing array as
- * needed (doubling its capacity, with the byte size checked against
- * overflow). Reallocating an array of mpz_t only moves the handles; the
- * limbs they point to are allocated separately and stay valid.
- * @param s Stack to be completed
- * @param val value to add
- * @return the same stack, with the new value on top
+ * Release the resources held by a value
+ * @param v The value to release (mpz_clear for a number, free for a string)
  */
-Stack stack_push(Stack s, mpz_t val) {
+void value_clear(Value *v) {
+    if (v->kind == VAL_NUM)
+        mpz_clear(v->num);
+    else
+        free(v->str);
+}
+
+/**
+ * Grow the backing array if it is full and return the slot for the next
+ * value, doubling the capacity with the byte size checked against overflow.
+ * Reallocating an array of Value only moves the handles; the limbs and
+ * string buffers they point to are allocated separately and stay valid.
+ * @param s Stack to grow
+ * @return Pointer to the free slot at the top of the stack
+ */
+static Value *stack_slot(Stack s) {
     if (s->size == s->cap) {
         size_t newcap, bytes;
         if (s->cap == 0)
             newcap = 8;
         else if (ckd_mul(&newcap, s->cap, (size_t) 2))
             rpn_fatal("stack too large");
-        if (ckd_mul(&bytes, newcap, sizeof(mpz_t)))
+        if (ckd_mul(&bytes, newcap, sizeof(Value)))
             rpn_fatal("stack too large");
 
-        mpz_t *grown = realloc(s->vals, bytes);
+        Value *grown = realloc(s->vals, bytes);
         if (!grown)
             rpn_fatal("memory allocation error");
         s->vals = grown;
         s->cap = newcap;
     }
 
-    mpz_init_set(s->vals[s->size], val);
+    return &s->vals[s->size];
+}
+
+/**
+ * Append a number at the top of a stack
+ * @param s Stack to be completed
+ * @param val value to add
+ * @return the same stack, with the new value on top
+ */
+Stack stack_push_num(Stack s, const mpz_t val) {
+    Value *slot = stack_slot(s);
+    slot->kind = VAL_NUM;
+    mpz_init_set(slot->num, val);
     s->size++;
     return s;
 }
 
 /**
+ * Append a string at the top of a stack (the string is copied)
+ * @param s Stack to be completed
+ * @param str NUL-terminated string to add
+ * @return the same stack, with the new value on top
+ */
+Stack stack_push_str(Stack s, const char *str) {
+    Value *slot = stack_slot(s);
+    size_t size;
+    if (ckd_add(&size, strlen(str), (size_t) 1))
+        rpn_fatal("string too large");
+
+    slot->str = malloc(size);
+    if (!slot->str)
+        rpn_fatal("memory allocation error");
+    memcpy(slot->str, str, size);  // copies the terminating NUL as well
+    slot->kind = VAL_STR;
+    s->size++;
+    return s;
+}
+
+/**
+ * Append a deep copy of a value at the top of a stack
+ * @param s Stack to be completed
+ * @param v Value to copy (number or string)
+ * @return the same stack, with the new value on top
+ */
+Stack stack_push_value(Stack s, const Value *v) {
+    if (v->kind == VAL_NUM)
+        return stack_push_num(s, v->num);
+    return stack_push_str(s, v->str);
+}
+
+/**
  * Take the value at the top of the stack
  * @param s Stack to take the value from
- * @param val pointer to store the taken value (initialized by this call)
+ * @param out pointer to store the taken value (ownership moves to the caller)
  * @return the same stack, without the former top value
  */
-Stack stack_pop(Stack s, mpz_t *val) {
+Stack stack_pop(Stack s, Value *out) {
     if (s->size > 0) {
         s->size--;
-        mpz_init_set(*val, s->vals[s->size]);
-        mpz_clear(s->vals[s->size]);
+        *out = s->vals[s->size];
     }
 
     return s;
@@ -106,7 +161,7 @@ bool stack_hasAtLeast(Stack s, int n) {
  */
 Stack stack_clear(Stack s) {
     for (size_t i = 0; i < s->size; i++)
-        mpz_clear(s->vals[i]);
+        value_clear(&s->vals[i]);
     s->size = 0;
     return s;
 }

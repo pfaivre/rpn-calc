@@ -395,7 +395,7 @@ test_exit 1 -z   # unknown option
 
 # Unimplemented command
 test_error "z"  "unimplemented"
-test_error "xy"  "'x' unimplemented"
+test_error "wy"  "'w' unimplemented"
 
 # Division by zero (operands stay on the stack, for /, % and ~ alike)
 test_error "5 0 /"  "divide by zero"
@@ -465,6 +465,101 @@ if [ "$nul_only_code" -ne 0 ] || [ -n "$nul_only" ]; then
     failures=$((failures + 1))
     echo "FAIL NUL-only input test: expected exit 0 and no output, got exit $nul_only_code, output '$nul_only'"
 fi
+
+# ===== STRINGS =====
+
+# A [...] literal pushes a string (outer brackets stripped)
+test "[hello] p"  "hello"
+test "[hello world] p"  "hello world"
+
+# P prints a string without a trailing newline and pops it
+test "[abc] P"  "abc"
+test "[a] P [b] P"  "ab"
+test "[abc] P 7 f"  "abc7"      # P popped the string, only 7 remains
+
+# n pops and prints a string without a trailing newline
+test "[abc] n 5 p"  "abc5"
+
+# An empty string is a valid value
+test "[] P 5 p"  "5"
+test "[] p"  ""
+
+# Nested brackets: the outer pair is stripped, inner pairs are kept
+test "[[a]b] P"  "[a]b"
+test "[[a]] p"  "[a]"
+
+# Strings may contain spaces, # and digits; a string that starts like a
+# number (or a comment) stays a string
+test "[a b] p"  "a b"
+test "[#not a comment] p"  "#not a comment"
+test "[5x] p"  "5x"
+test "[_3] p"  "_3"
+
+# Literals can be adjacent to other tokens
+test "2[ab]f"  $'ab\n2'
+test "2 3+[ab]f"  $'ab\n5'
+test "[ab]5p"  "5"
+
+# d, r, c work on strings
+test_stack "2 3 [ab] r f"  "3" "ab" "2"
+test "[a] d r f"  $'a\na'
+test "[c] c f"  ""
+
+# f prints strings and numbers, top first
+test_stack "[x] 1 [y] f"  "y" "1" "x"
+
+# Arithmetic on a string: error, operands stay on the stack (as in dc)
+test_error_stack "[hi] 3 + f"  $'3\nhi'  "non-numeric value"
+test_error_stack "3 [hi] + f"  $'hi\n3'  "non-numeric value"
+test_error_stack "[a] [b] * f"  $'b\na'  "non-numeric value"
+test_error_stack "[hi] v f"  "hi"  "non-numeric value"
+test_error "[hi] 1 -"  "non-numeric value"
+test_error "[hi] 0 /"  "non-numeric value"
+test_error "[hi] 2 ^ f"  "non-numeric value"
+test_error "1 [hi] ~"  "non-numeric value"
+
+# An unterminated string literal is an error
+test_error "[abc"  "unterminated string"
+test_exit_stdin 1 ""  '[abc\n'
+
+# Strings persist across lines like any other value
+test_lines $'ab\ncd'  '[ab] p\n[cd] p\n'
+
+# ===== MACROS (x) =====
+
+# x executes a string as commands on the same stack
+test "[1 2 + p] x"  "3"
+test "1 [2 +] x p"  "3"
+test "[5] x p"  "5"
+test "[2 d * p] x"  "4"
+
+# Macros nest
+test "[[2 3 + p] x] x"  "5"
+test "[[[[1 p] x] x] x] x"  "1"
+
+# A macro can push and print strings
+test "[[ab] P] x"  "ab"
+test "[[ab] p] x"  "ab"
+
+# An empty macro is a no-op
+test "[] x 5 p"  "5"
+
+# x on a number does nothing: the stack is left untouched (as in dc)
+test "5 x f"  "5"
+test "5 6 x f"  $'6\n5'
+
+# x needs one value on the stack
+test_error "x"  "stack underflow"
+
+# Errors inside a macro are reported and the session continues
+test_error "[5 0 /] x"  "divide by zero"
+test_exit_stdin 1 "7"  '[5 0 /] x 7 p\n'
+
+# Compact notation
+test "[1p]x"  "1"
+
+# Macros work with -e too
+test_e "3" -e "[1 2 + p] x"
 
 # ===== SUMMARY =====
 
