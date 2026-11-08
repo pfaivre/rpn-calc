@@ -136,17 +136,18 @@ Stack stack_push_value(Stack s, Value v) {
 }
 
 /**
- * Take the value at the top of the stack
+ * Take the value at the top of the stack. Fatal if the stack is empty:
+ * callers must guard with stack_hasAtLeast so a forgotten guard fails
+ * loudly here instead of leaving *out uninitialized.
  * @param s Stack to take the value from
  * @param out pointer to store the taken value (ownership moves to the caller)
  * @return the same stack, without the former top value
  */
 Stack stack_pop(Stack s, Value *out) {
-    if (s->size > 0) {
-        s->size--;
-        *out = s->vals[s->size];
-    }
-
+    if (s->size == 0)
+        rpn_fatal("stack underflow");
+    s->size--;
+    *out = s->vals[s->size];
     return s;
 }
 
