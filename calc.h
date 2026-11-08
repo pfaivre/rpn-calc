@@ -26,8 +26,9 @@ SOFTWARE.
 #define CALC_H
 
 #include "stack.h"
+#include "registers.h"
 
-[[nodiscard]] Stack calc_parse(Stack s, char* string);
+[[nodiscard]] Stack calc_parse(Stack s, Registers regs, char* string);
 
 [[nodiscard]] bool calc_had_error();
 

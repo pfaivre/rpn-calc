@@ -163,17 +163,131 @@ static void _calc_print_bytes(const mpz_t num) {
     mpz_clear(abs);
 }
 
-static Stack _calc_parse_depth(Stack s, char *string, int depth);
+static Stack _calc_parse_depth(Stack s, Registers regs, char *string, int depth);
+
+/**
+ * Performs a register command (s, l, S, L, : or ;), whose register name is
+ * given separately (it is the token following the command letter)
+ * @param s Stack to modify
+ * @param regs Register file to modify
+ * @param cmd The command letter (one of s, l, S, L, : or ;)
+ * @param name The register name (one byte)
+ * @return The stack after performing the command
+ */
+static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char name) {
+    switch (cmd) {
+        // s: pop the top of the main stack and make it the register's only
+        // value (replacing any previous content)
+        case 's': {
+            if (!stack_hasAtLeast(s, 1)) {
+                _calc_error("stack underflow");
+                return s;
+            }
+            Value v;
+            s = stack_pop(s, &v);
+            Stack rs = register_stack(regs, name);
+            rs = stack_clear(rs);
+            rs = stack_push_value(rs, v);
+            value_clear(&v);
+            return s;
+        }
+        // l: push a copy of the register's top value; an empty register
+        // loads 0, as in dc
+        case 'l': {
+            Stack rs = register_stack(regs, name);
+            if (stack_hasAtLeast(rs, 1))
+                return stack_push_value(s, *stack_top(rs));
+            mpz_t zero;
+            mpz_init_set_ui(zero, 0);
+            s = stack_push_num(s, zero);
+            mpz_clear(zero);
+            return s;
+        }
+        // S: pop the top of the main stack and push it onto the register's
+        // own stack
+        case 'S': {
+            if (!stack_hasAtLeast(s, 1)) {
+                _calc_error("stack underflow");
+                return s;
+            }
+            Value v;
+            s = stack_pop(s, &v);
+            Stack rs = register_stack(regs, name);
+            rs = stack_push_value(rs, v);
+            value_clear(&v);
+            return s;
+        }
+        // L: pop the register's stack top and push it onto the main stack
+        case 'L': {
+            Stack rs = register_stack(regs, name);
+            if (!stack_hasAtLeast(rs, 1)) {
+                fprintf(stderr, "rpn: stack register '%c' is empty\n", name);
+                _calc_errorFlag = true;
+                return s;
+            }
+            Value v;
+            rs = stack_pop(rs, &v);
+            s = stack_push_value(s, v);
+            value_clear(&v);
+            return s;
+        }
+        // : array store: the top of the main stack is the index, the second
+        // is the value stored at that index (the value may be a string)
+        case ':': {
+            if (!stack_hasAtLeast(s, 2)) {
+                _calc_error("stack underflow");
+                return s;
+            }
+            if (stack_top(s)->kind != VAL_NUM || mpz_sgn(stack_top(s)->num) < 0) {
+                _calc_error("array index must be a nonnegative integer");
+                return s;
+            }
+            Value index, val;
+            s = stack_pop(s, &index);  // Pop the index (top of stack)
+            s = stack_pop(s, &val);    // Pop the value
+            register_array_store(regs, name, index.num, val);  // moves val
+            value_clear(&index);
+            return s;
+        }
+        // ; array load: pop the index; push the stored value, or 0 when the
+        // index was never stored
+        case ';': {
+            if (!stack_hasAtLeast(s, 1)) {
+                _calc_error("stack underflow");
+                return s;
+            }
+            if (stack_top(s)->kind != VAL_NUM || mpz_sgn(stack_top(s)->num) < 0) {
+                _calc_error("array index must be a nonnegative integer");
+                return s;
+            }
+            Value index;
+            s = stack_pop(s, &index);
+            const Value *cell = register_array_find(regs, name, index.num);
+            if (cell)
+                s = stack_push_value(s, *cell);
+            else {
+                mpz_t zero;
+                mpz_init_set_ui(zero, 0);
+                s = stack_push_num(s, zero);
+                mpz_clear(zero);
+            }
+            value_clear(&index);
+            return s;
+        }
+    }
+    return s;
+}
 
 /**
  * Performs a single command
  * @param s Stack to modify
+ * @param regs Register file to modify (forwarded to x for macros)
  * @param command A single part of the input (e.g. an operand, an operator or
  * an instruction)
  * @param depth Current macro nesting depth, forwarded to x
  * @return The top of the stack after performing the command
  */
-static Stack _calc_proceed(Stack s, const char* command, int depth) {
+static Stack _calc_proceed(Stack s, Registers regs, const char* command, int depth) {
     // A number
     if (isdigit((unsigned char) command[0]) || command[0] == '_') {
         mpz_t number;
@@ -394,7 +508,7 @@ static Stack _calc_proceed(Stack s, const char* command, int depth) {
             }
             Value a;
             s = stack_pop(s, &a);
-            s = _calc_parse_depth(s, a.str, depth + 1);
+            s = _calc_parse_depth(s, regs, a.str, depth + 1);
             value_clear(&a);
         }
         return s;
@@ -495,11 +609,12 @@ static char *_calc_firstToken(char *token, char *str, bool *is_string) {
 /**
  * Performs a set of commands (e.g. "2 3*p") at a given macro nesting depth
  * @param s Stack to modify
+ * @param regs Register file to modify
  * @param string Commands to execute
  * @param depth Current macro nesting depth (0 for top-level input)
  * @return The top of the stack after performing the commands
  */
-static Stack _calc_parse_depth(Stack s, char* string, int depth) {
+static Stack _calc_parse_depth(Stack s, Registers regs, char* string, int depth) {
     char *ptr = string;
     size_t tokcap;
     if (ckd_add(&tokcap, strlen(string), (size_t) 1))
@@ -522,7 +637,22 @@ static Stack _calc_parse_depth(Stack s, char* string, int depth) {
         if (token[0] == '#')
             break;
 
-        s = _calc_proceed(s, token, depth);
+        // Register commands (s, l, S, L, : and ;) take the register name as
+        // the next token; the name may be written with or without a
+        // separating space (sa and s a both name register a)
+        if (token[1] == '\0' && strchr("slSL:;", token[0]) != NULL) {
+            char cmd = token[0];
+            bool name_is_string;
+            ptr = _calc_firstToken(token, ptr, &name_is_string);
+            if (ptr == NULL || name_is_string || token[1] != '\0') {
+                _calc_error("expected a single-character register name");
+                break;
+            }
+            s = _calc_register_cmd(s, regs, cmd, (unsigned char) token[0]);
+            continue;
+        }
+
+        s = _calc_proceed(s, regs, token, depth);
     }
 
     free(token);
@@ -532,9 +662,10 @@ static Stack _calc_parse_depth(Stack s, char* string, int depth) {
 /**
  * Performs a set of commands (e.g. "2 3*p")
  * @param s Stack to modify
+ * @param regs Register file to modify
  * @param string Commands to execute
  * @return The top of the stack after performing the commands
  */
-Stack calc_parse(Stack s, char* string) {
-    return _calc_parse_depth(s, string, 0);
+Stack calc_parse(Stack s, Registers regs, char* string) {
+    return _calc_parse_depth(s, regs, string, 0);
 }
