@@ -334,6 +334,42 @@ test_stack "1 2 r r f"  "2" "1"
 test "r f"  ""
 test "1 r f"  "1"
 
+# R rotates the top n values by one position: a positive n moves the bottom
+# of the rotated segment to the top (the top value becomes second from top)
+test_stack "1 2 3 4 2 R f"  "3" "4" "2" "1"
+test_stack "1 2 3 4 3 R f"  "2" "4" "3" "1"
+
+# A negative n rotates the other way: the top value moves to the bottom of
+# the rotated segment
+test_stack "1 2 3 4 _3 R f"  "3" "2" "4" "1"
+test_stack "1 2 3 4 _2 R f"  "3" "4" "2" "1"
+
+# The count is truncated to its integer part
+test_stack "1 2 3 4 2.9 R f"  "3" "4" "2" "1"
+test_stack "1 2 3 4 _2.9 R f"  "3" "4" "2" "1"
+
+# n = 0 and n = 1 are no-ops; a count >= the stack size rotates the whole
+# stack once (not n mod size, as in dc)
+test_stack "1 2 3 4 0 R f"  "4" "3" "2" "1"
+test_stack "1 2 3 4 1 R f"  "4" "3" "2" "1"
+test_stack "1 2 3 4 6 R f"  "1" "4" "3" "2"
+test_stack "1 2 3 8 R f"     "1" "3" "2"
+test_stack "1 2 3 _8 R f"    "2" "1" "3"
+
+# A huge count rotates the whole stack once (arbitrary precision; dc punts
+# with "value overflows simple integer" and does not rotate)
+test_stack "1 2 3 2 100 ^ R f"  "1" "3" "2"
+
+# R rotates strings like any other value; fewer than two values left after
+# popping the count is a no-op
+test_stack "1 [ab] 2 2 R f"  "ab" "2" "1"
+test "5 1 R f"  "5"
+test "1 R f"  ""
+
+# A string count is an error and the operands stay on the stack (as in dc)
+test_error_stack "1 2 [s] R f"  $'s\n2\n1'  "non-numeric value"
+test_error "R"  "stack underflow"
+
 # Clear then push
 test "5 c 3 p"  "3"
 

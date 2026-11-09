@@ -115,6 +115,16 @@ same "5 0 ~ f"            $'0\n5'
 same "1 2 3 f"            $'3\n2\n1'
 same "1 2 r f"            $'1\n2'
 same "1 d f"              $'1\n1'
+same "1 2 3 4 2 R f"      $'3\n4\n2\n1'   # R: positive n moves segment bottom to top
+same "1 2 3 4 _3 R f"     $'3\n2\n4\n1'   # negative n rotates the other way
+same "1 2 3 4 2.9 R f"    $'3\n4\n2\n1'   # count truncated to its integer part
+same "1 2 3 4 0 R f"      $'4\n3\n2\n1'   # n = 0 is a no-op
+same "1 2 3 4 6 R f"      $'1\n4\n3\n2'   # count >= size rotates the whole stack once
+same "1 2 3 8 R f"        $'1\n3\n2'
+same "1 2 3 _8 R f"       $'2\n1\n3'
+same "1 [ab] 2 2 R f"     $'ab\n2\n1'     # R rotates strings like any value
+same "1 2 [s] R f"                        # string count: both error, operands kept
+same "R"                                  # underflow: both error, empty stdout
 same "[hello] p"          "hello"
 same "[[a]b] p"           "[a]b"
 same "5 sa la p"          "5"
@@ -353,6 +363,18 @@ diverges "17 o 5 p"  "5"  "output base must be a number between 2 and 16 (inclus
 # keeps the letters' face values in rpn (FF = 165); dc 1.5.2 clamps them to 9 (FF = 99).
 # dc: "FF p" -> stdout "99", no error, exit 0.
 diverges "FF p"  "165"  ""  0
+
+# A huge R count: dc 1.5.2 punts ("value overflows simple integer; punting..."),
+# pops the count but does not rotate; rpn's arbitrary-precision count rotates
+# the whole stack once.
+# dc: "1 2 3 2 100 ^ R f" -> stdout "3\n2\n1", stderr nonempty, exit 0.
+diverges "1 2 3 2 100 ^ R f"  $'1\n3\n2'  ""  0
+
+# The a command is deprecated in dc itself (dc 1.5.2 prints a deprecation
+# warning and still computes it: low byte of the integer part as a string);
+# rpn deliberately does not implement it and reports 'a' as unimplemented.
+# dc: "65 a p" -> stdout "A", stderr deprecation warning, exit 0.
+diverges "65 a p"  "65"  "'a' unimplemented"  1
 
 # ===== SUMMARY =====
 

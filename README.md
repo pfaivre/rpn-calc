@@ -136,6 +136,8 @@ Numbers are stored in base 10 internally: the input base converts digits at pars
 
 `r` Swaps the two top values of the stack. With fewer than two values on the stack it does nothing (as in dc).
 
+`R` Pops a count `n` (its integer part) and rotates the top `min(|n|, size)` values of the stack by one position: for a positive `n` the bottom of the rotated segment moves to the top (the top value becomes the second from the top), for a negative `n` the top moves to the bottom. A count whose magnitude is at least the stack size rotates the whole stack once; `n = 0` is a no-op. A string count is an error and stays on the stack.
+
 `c` Clears the stack.
 
 `z` Pushes the depth of the stack (without popping).
@@ -217,6 +219,7 @@ For the commands listed above, rpn behaves like dc (checked against GNU dc 1.5.2
   scale rules, as in dc.
 - String literals `[...]` (with nested brackets), and printing them with `p`, `n`, `P` and `f`: `p` adds a trailing newline, `n` and `P` pop the value and print without one, `f` prints one value per line, top first. Arithmetic on a string reports `non-numeric value` and leaves the operands on the stack, as in dc.
 - Macro execution with `x`: a string is popped and run as commands on the same stack, macros nest, and `x` on a number leaves the stack untouched.
+- `R` rotation of the top `min(|n|, size)` stack values by one position (positive `n`: segment bottom to top; negative `n`: the other way; a count of magnitude >= the stack size rotates the whole stack once; the count is truncated to its integer part).
 - Registers: `s`/`l`/`S`/`L` on a per-register value stack (with `s` replacing the content, `l` peeking, `L` erroring on an empty register stack, and `l` on an empty register loading 0), and `:`/`;` arrays per register (index on top, missing index loads 0, negative or non-numeric index rejected with the operands kept, values may be strings, a register's stack and array are independent).
 - Conditionals `>r`, `<r`, `=r`, `!>r`, `!<r`, `!=r`: two values popped and compared as numbers (top against second), the register executed as a macro when the condition holds, without being consumed; a string operand reports `non-numeric value` with the operands kept.
 - `q` (quit two levels, exiting the program at the top level or in a directly-called macro) and `Q` (pop a count, quit that many levels, never exit; over-depth counts still quit the available levels and invalid counts are errors, as in dc).
@@ -250,6 +253,10 @@ rpn deliberately differs from dc in the following ways:
   pasted expression execute arbitrary commands. rpn reports `!` as
   unimplemented. This is a security boundary, not a missing feature (see
   "Security" below).
+- The `a` command (number to its low byte as a string, string to its first
+  character) is deprecated in dc itself, so rpn deliberately does not
+  implement it either: rpn reports `a` as unimplemented, where dc 1.5.2
+  still computes it behind a deprecation warning.
 - An unknown command such as `w` is reported as unimplemented. A `[...]`
   literal not closed on the same line is an error, where dc keeps reading the
   following lines into the string.
@@ -266,10 +273,15 @@ rpn deliberately differs from dc in the following ways:
   would exceed 32 MiB, is rejected with `exponent too large in raise`, while
   a huge negative exponent is computed exactly (0, 1 or _1), where dc gives
   up with the same error.
+- A rotation count too large for a C long makes dc punt ("value overflows
+  simple integer") and skip the rotation; rpn's arbitrary-precision count
+  rotates the whole stack once.
 
 ## Performance
 `make bench` (or `bash tests/bench.sh`, needs dc installed) times rpn against
-GNU dc on compute-heavy expressions, best of `BENCH_N` runs (default 3). Indicative
+GNU dc on compute-heavy expressions, best of `BENCH_N` runs (default 3).
+
+Indicative
 results on one machine (Intel(R) Core(TM) i5-10600KF CPU @ 4.10GHz), wall time in ms:
 
 | Benchmark | rpn | dc 1.5.2 |
@@ -282,7 +294,7 @@ results on one machine (Intel(R) Core(TM) i5-10600KF CPU @ 4.10GHz), wall time i
 | sum 1..100000 via macro loop | 2 | 57 |
 | countdown 100000 via loop | 1 | 41 |
 | factorial 900 (recursive loop) | 2 | 5 |
-| `|` modpow, 60-digit exponent | 1 | 1 |
+| `\|` modpow, 60-digit exponent | 1 | 1 |
 | division at k=500, big multiply | 1 | 1 |
 
 rpn is much faster on parsing (GMP `mpz_set_str` instead of digit-by-digit
