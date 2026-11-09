@@ -782,13 +782,13 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
             _calc_error("stack underflow");
             return s;
         }
-        if (stack_top(s)->kind != VAL_NUM) {
-            _calc_error("non-numeric value");
-            return s;
-        }
         mpz_t n;
         mpz_init(n);
-        number_int_part(stack_top(s), n);
+        if (!_calc_int_part_into(stack_top(s), n)) {
+            _calc_error("non-numeric value");
+            mpz_clear(n);
+            return s;
+        }
         Value count;
         s = stack_pop(s, &count);
         value_clear(&count);
@@ -800,19 +800,8 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
             if (un < m)
                 m = un;
         }
-        if (m > 1) {
-            Value *seg = &s->vals[s->size - m];
-            if (!neg) {
-                Value tmp = seg[0];
-                memmove(seg, seg + 1, (m - 1) * sizeof(Value));
-                seg[m - 1] = tmp;
-            } else {
-                Value tmp = seg[m - 1];
-                memmove(seg + 1, seg, (m - 1) * sizeof(Value));
-                seg[0] = tmp;
-            }
-        }
         mpz_clear(n);
+        stack_rotate_top(s, m, neg);
         return s;
     }
 

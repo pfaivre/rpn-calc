@@ -209,6 +209,34 @@ Stack stack_clear(Stack s) {
 }
 
 /**
+ * Rotate the top m values of the stack by one position (m is clamped to the
+ * stack size): with reverse=false the bottom of the rotated segment moves to
+ * the top, with reverse=true the top moves to the bottom. Fewer than two
+ * values to rotate is a no-op. Values are moved bitwise, so each keeps its
+ * slot's ownership of the limbs or string buffer it points to.
+ * @param s Stack to rotate
+ * @param m Number of top values to rotate
+ * @param reverse Direction of the rotation
+ */
+void stack_rotate_top(Stack s, size_t m, bool reverse) {
+    if (m > s->size)
+        m = s->size;
+    if (m < 2)
+        return;
+
+    Value *seg = &s->vals[s->size - m];
+    if (!reverse) {
+        Value tmp = seg[0];
+        memmove(seg, seg + 1, (m - 1) * sizeof(Value));
+        seg[m - 1] = tmp;
+    } else {
+        Value tmp = seg[m - 1];
+        memmove(seg + 1, seg, (m - 1) * sizeof(Value));
+        seg[0] = tmp;
+    }
+}
+
+/**
  * Free all the space occupied by the stack
  * @param s The stack to free
  * @return NULL

@@ -83,6 +83,19 @@ static Stack run_file(Stack s, Registers regs, const char *path) {
     return s;
 }
 
+/**
+ * Free the stack and register file, then exit with the given status. Every
+ * exit path from main goes through here so no allocation is left behind.
+ * @param s Stack to free
+ * @param regs Register file to free
+ * @param code Exit status
+ */
+[[noreturn]] static void exit_clean(Stack s, Registers regs, int code) {
+    stack_delete(s);
+    registers_delete(regs);
+    exit(code);
+}
+
 int main(int argc, char **argv) {
     Stack s = stack_init();
     Registers regs = registers_init();
@@ -118,13 +131,13 @@ int main(int argc, char **argv) {
                 break;
             case 'h':
                 printUsage(argv[0]);
-                exit(0);
+                exit_clean(s, regs, 0);
             case 'V':
                 printVersion(VERSION, COPYRIGHT);
-                exit(0);
+                exit_clean(s, regs, 0);
             default:
                 printUsage(argv[0]);
-                exit(1);
+                exit_clean(s, regs, 1);
         }
     }
 
@@ -134,11 +147,10 @@ int main(int argc, char **argv) {
 
     // Standard input, one line per line: after positional files, or when no
     // -e, -f or file argument was given at all (as in dc)
-    if ((optind < argc || !saw_opt_script) && !calc_quit_requested())
+    bool read_stdin = optind < argc || !saw_opt_script;
+    if (read_stdin && !calc_quit_requested())
         s = run_lines(s, regs, stdin, "standard input");
 
-    stack_delete(s);
-    registers_delete(regs);
-    return calc_had_error() ? 1 : 0;
+    exit_clean(s, regs, calc_had_error() ? 1 : 0);
 }
 

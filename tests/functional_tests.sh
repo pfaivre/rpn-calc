@@ -349,7 +349,7 @@ test_stack "1 2 3 4 2.9 R f"  "3" "4" "2" "1"
 test_stack "1 2 3 4 _2.9 R f"  "3" "4" "2" "1"
 
 # n = 0 and n = 1 are no-ops; a count >= the stack size rotates the whole
-# stack once (not n mod size, as in dc)
+# stack once (as in dc)
 test_stack "1 2 3 4 0 R f"  "4" "3" "2" "1"
 test_stack "1 2 3 4 1 R f"  "4" "3" "2" "1"
 test_stack "1 2 3 4 6 R f"  "1" "4" "3" "2"
@@ -359,6 +359,7 @@ test_stack "1 2 3 _8 R f"    "2" "1" "3"
 # A huge count rotates the whole stack once (arbitrary precision; dc punts
 # with "value overflows simple integer" and does not rotate)
 test_stack "1 2 3 2 100 ^ R f"  "1" "3" "2"
+test_stack "1 2 3 0 2 100 ^ - R f"  "2" "1" "3"   # huge negative count: the other way
 
 # R rotates strings like any other value; fewer than two values left after
 # popping the count is a no-op
