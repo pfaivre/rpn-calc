@@ -289,9 +289,7 @@ rpn deliberately differs from dc in the following ways:
 
 ## Performance
 `make bench` (or `bash tests/bench.sh`, needs dc installed) times rpn against
-GNU dc on compute-heavy expressions, best of `BENCH_N` runs (default 3).
-
-Indicative
+GNU dc on compute-heavy expressions, best of `BENCH_N` runs (default 3). Indicative
 results on one machine (Intel(R) Core(TM) i5-10600KF CPU @ 4.10GHz), wall time in ms:
 
 | Benchmark | rpn | dc 1.5.2 |
@@ -303,14 +301,16 @@ results on one machine (Intel(R) Core(TM) i5-10600KF CPU @ 4.10GHz), wall time i
 | `v` at k=500 | 1 | 7 |
 | sum 1..100000 via macro loop | 2 | 57 |
 | countdown 100000 via loop | 1 | 41 |
+| R rotates a 900-deep stack 80k times | 35 | 211 |
 | factorial 900 (recursive loop) | 2 | 5 |
 | `\|` modpow, 60-digit exponent | 1 | 1 |
 | division at k=500, big multiply | 1 | 1 |
 
 rpn is much faster on parsing (GMP `mpz_set_str` instead of digit-by-digit
-accumulation), big `^`, and calculator loops (array-backed stack vs a linked
-list); `|` is at parity since both use GMP's modular exponentiation. Small
-operations are dominated by process startup (~1 ms) for both.
+accumulation), big `^`, calculator loops, and `R` rotation (array-backed stack:
+one contiguous memmove vs a linked-list walk); `|` is at parity since both use
+GMP's modular exponentiation. Small operations are dominated by process
+startup (~1 ms) for both.
 
 ## Security
 
