@@ -1,0 +1,18 @@
+# Conway's Game of Life on a 10x6 visible grid, padded to 12x8 so the edges
+# need no bounds checks. A glider runs for 8 generations, one grid per
+# block: '#' = alive, '.' = dead. Runs identically under rpn and dc.
+# Note: rpn string literals must close on one line, so each macro is a single
+# line, and macro registers (uppercase) are distinct from the counters
+# (lowercase) stored in other registers.
+12 sp 10 sw 6 sh
+1 27 :a 1 40 :a 1 50 :a 1 51 :a 1 52 :a
+[1 sv] sq
+[li ;a 1 =q] sr
+[ly lp * lx + si 0 sn li 13 - ;a ln + sn li 12 - ;a ln + sn li 11 - ;a ln + sn li 1 - ;a ln + sn li 1 + ;a ln + sn li 11 + ;a ln + sn li 12 + ;a ln + sn li 13 + ;a ln + sn 0 sv ln 3 =q ln 2 =r lv li :b] sK
+[lK x 1 lx + sx lw lx !>X] sX
+[ly lp * lx + ;a 11 * 46 r - P 1 lx + sx lw lx !>D] sD
+[1 sx lX x 1 ly + sy lh ly !>Y] sY
+[1 sx lD x 10 P 1 ly + sy lh ly !>Z] sZ
+[li ;b li :a 1 li + si 96 li <C] sC
+[1 sy lYx 0 si lCx 1 sy lZx 10 P lt 1 - st 0 lt >E] sE
+8 st lEx

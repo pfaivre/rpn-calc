@@ -1228,6 +1228,24 @@ test_error "1 2 |"  "stack underflow"
 test_error_stack "2 3 0 | f"  $'0\n3\n2'  "remainder by zero"
 test_error "[a] 2 3 |"  "non-numeric value"
 
+# ===== SHIPPED EXAMPLES =====
+# (the dc compliance suite also runs these under GNU dc and requires identical
+# output; here they are pinned under rpn alone so they are covered without dc)
+
+# Miller-Rabin: 2^61-1 prime, 561 composite, 2^64+1 composite, 10^9+7 prime,
+# 10^9+8 even, 2^89-1 prime, 2047 composite
+tests_run=$((tests_run + 1))
+r=$(./rpn examples/miller_rabin.rpn </dev/null 2>/dev/null)
+[ "$r" = $'1\n0\n0\n1\n0\n1\n0' ] || { failures=$((failures+1)); echo "FAIL miller_rabin.rpn: got '$r'"; }
+
+# Game of Life: 8 generations of a 6-row grid plus a blank separator = 56 lines
+tests_run=$((tests_run + 1))
+lines=$(./rpn examples/game_of_life.rpn </dev/null 2>/dev/null | wc -l)
+row3=$(./rpn examples/game_of_life.rpn </dev/null 2>/dev/null | sed -n 3p)
+if [ "$lines" != "56" ] || [ "$row3" != ".#.#......" ]; then
+    failures=$((failures+1)); echo "FAIL game_of_life.rpn: lines=$lines row3='$row3'"
+fi
+
 # ===== SUMMARY =====
 
 if [ "$failures" -eq 0 ]; then
