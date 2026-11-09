@@ -4,7 +4,8 @@ A humble dc clone, almost entirely compliant with it, with an emphasis on arithm
 ## Synopsis
 ```sh
 rpn [-V] [--version] [-h] [--help]
-    [-e scriptexpression] [--expression=scriptexpression] [file...]
+    [-e scriptexpression] [--expression=scriptexpression]
+    [-f scriptfile] [--file=scriptfile] [file...]
 ```
 
 ## Description
@@ -36,22 +37,31 @@ Print a usage message briefly summarizing these command-line options, then exit.
 ```sh
 -e, --expression=script
 ```
-Add the commands in script to the set of commands to be run. Multiple `-e`
-options are concatenated. `-e` expressions run before any script files.
+Execute the commands in script, one macro level above the top level (so `q`/`Q`
+counting matches dc). Multiple `-e` options run in command-line order,
+interleaved with `-f` files as given.
+
+```sh
+-f, --file=scriptfile
+```
+Read and execute scriptfile where it appears on the command line, in order
+interleaved with `-e` options. The file name `-` reads the standard input.
 
 ```sh
 file...
 ```
-Read and execute each script file, in order, one line at a time (like standard
-input lines; the stack, registers, scale and bases persist across files). An
-unreadable file is an error but does not stop the session. After script files,
-standard input is read (as in dc); with `-e` and no files, standard input is
-not read.
+Read and execute each script file, in order, after all options, one line at a
+time (like standard input lines; the stack, registers, scale and bases persist
+across files). The file name `-` reads the standard input. An unreadable file
+is an error but does not stop the session. After positional files, standard
+input is read (as in dc); with only `-e`/`-f` options and no positional file,
+standard input is not read.
 
 ## Input
-Without `-e` or files, expressions are read from the standard input, one per
-line; the stack persists across lines. With script files, they are read first
-(in order) and the standard input follows them. Spaces, tabs and newlines separate tokens, and
+Without any `-e`, `-f` or file argument, expressions are read from the
+standard input, one per line; the stack persists across lines. With positional
+files, the `-e`/`-f` options run first (in command-line order), then the files
+in order, and the standard input follows them. Spaces, tabs and newlines separate tokens, and
 spaces may be omitted between tokens (`2 3*4+p`). Negative numbers are written
 with an underscore prefix (`_5`). Numbers may have a decimal point (`1.5`,
 `.5`, `1.`); a second `.` starts a new token, so `1..2` is read as `1.` then
@@ -226,7 +236,7 @@ For the commands listed above, rpn behaves like dc (checked against GNU dc 1.5.2
 - Input/output bases `i`/`I`/`o`/`O` in 2..16: digits `0`-`9` and `A`-`F` are read in the input base (letters keep their face value even beyond the base), numbers are stored base 10 internally, and printing converts to the output base — integer part in that base, fraction with `ceil(log_base(10^scale))` digits, uppercase digits, no leading zero before the point, zero as `0`. `P` prints bytes of the integer part in any base.
 - Stack introspection: `z` pushes the stack depth, `Z` pops and pushes the decimal digit count of a number (or character count of a string), `X` pops and pushes the scale of the value.
 - `|` modular exponentiation: `b^e mod m` with arbitrarily large exponents; the base and exponent are truncated to integers, the modulus keeps its scale, and the result scale is `max(scale(base), scale(modulus))`.
-- The `-e` option, executed one macro level above the top level as in dc, and reading expressions from standard input without it.
+- The `-e` and `-f` options, executed in command-line order (each `-e` one macro level above the top level, as in dc), positional files after all options, `-` as standard input, and standard input read at the end only when a positional file was given or no `-e`/`-f`/file argument was given at all.
 
 rpn deliberately differs from dc in the following ways:
 

@@ -437,7 +437,8 @@ test_lines ""  ''
 # ===== COMMAND LINE =====
 
 test_e "2" -e "1 1 + p"
-test_e "2" -e "1 1" -e "+ p"   # multiple -e are concatenated
+test_e "2" -e "1 1" -e "+ p"   # multiple -e run in command-line order
+test_e "2" -e "1 Q" -e "2 p"   # Q unwinds only its own -e frame (as in dc)
 test_e "2" --expression="1 1 + p"
 test_contains "rpn 0.1" -V
 test_contains "rpn 0.1" --version
@@ -1135,6 +1136,58 @@ r=$(./rpn "$tmpd" </dev/null 2>"$tmpd/err"); code=$?
 if [ -n "$r" ] || [ "$code" != "1" ] || ! grep -q "could not read" "$tmpd/err"; then
     failures=$((failures+1)); echo "FAIL directory arg: out='$r' code=$code err='$(cat "$tmpd/err")'"
 fi
+
+# ===== -f / --file (script files given as options) =====
+# -f files run in command-line order, interleaved with -e as given, and
+# before positional files (as in dc)
+
+tests_run=$((tests_run + 1))
+r=$(./rpn -f "$tmpd/a.rpn" -f "$tmpd/b.rpn" </dev/null 2>/dev/null)
+[ "$r" = $'1\n4\n5' ] || { failures=$((failures+1)); echo "FAIL -f in order: got '$r'"; }
+
+tests_run=$((tests_run + 1))
+r=$(./rpn -e '9 p' -f "$tmpd/a.rpn" "$tmpd/b.rpn" </dev/null 2>/dev/null)
+[ "$r" = $'9\n1\n4\n5' ] || { failures=$((failures+1)); echo "FAIL -e -f positional order: got '$r'"; }
+
+# options run in the order given: here -f runs before -e
+tests_run=$((tests_run + 1))
+r=$(./rpn -f "$tmpd/a.rpn" -e '9 p' "$tmpd/b.rpn" </dev/null 2>/dev/null)
+[ "$r" = $'1\n4\n9\n5' ] || { failures=$((failures+1)); echo "FAIL -f -e interleaved: got '$r'"; }
+
+# --file= long option
+tests_run=$((tests_run + 1))
+r=$(./rpn --file="$tmpd/b.rpn" </dev/null 2>/dev/null)
+[ "$r" = "5" ] || { failures=$((failures+1)); echo "FAIL --file: got '$r'"; }
+
+# -f - reads standard input
+tests_run=$((tests_run + 1))
+r=$(printf '7 p\n' | ./rpn -f - 2>/dev/null)
+[ "$r" = "7" ] || { failures=$((failures+1)); echo "FAIL -f -: got '$r'"; }
+
+# positional - reads standard input, after the options
+tests_run=$((tests_run + 1))
+r=$(printf '8 p\n' | ./rpn -e '3 p' - 2>/dev/null)
+[ "$r" = $'3\n8' ] || { failures=$((failures+1)); echo "FAIL positional -: got '$r'"; }
+
+# stdin is NOT read when only -e/-f options are given (as in dc) ...
+tests_run=$((tests_run + 1))
+r=$(printf '7 p\n' | ./rpn -f "$tmpd/a.rpn" 2>/dev/null)
+[ "$r" = $'1\n4' ] || { failures=$((failures+1)); echo "FAIL -f only, no stdin: got '$r'"; }
+
+# ... but it is read after positional files
+tests_run=$((tests_run + 1))
+r=$(printf '7 p\n' | ./rpn -f "$tmpd/a.rpn" "$tmpd/b.rpn" 2>/dev/null)
+[ "$r" = $'1\n4\n5\n7' ] || { failures=$((failures+1)); echo "FAIL -f + positional, stdin: got '$r'"; }
+
+# an unreadable -f file is an error (exit 1) but later arguments still run
+tests_run=$((tests_run + 1))
+r=$(./rpn -f "$tmpd/nope" "$tmpd/b.rpn" </dev/null 2>"$tmpd/err"); code=$?
+if [ "$r" != "5" ] || [ "$code" != "1" ] || ! grep -q "could not open file" "$tmpd/err"; then
+    failures=$((failures+1)); echo "FAIL missing -f file: out='$r' code=$code err='$(cat "$tmpd/err")'"
+fi
+
+# -f without an argument is a usage error
+test_exit 1 -f
 
 rm -rf "$tmpd"
 

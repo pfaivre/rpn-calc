@@ -288,6 +288,12 @@ same_file -e '9 p' "$tmpdir/s1"              # -e runs before files
 same_file "$tmpdir/sbad" "$tmpdir/s2"        # error in a file: both error, session continues
 same_file "$tmpdir/snonl"                    # no trailing newline
 same_file "$tmpdir/nope" "$tmpdir/s1"        # missing file: both error, later files still run
+same_file -f "$tmpdir/s1" "$tmpdir/s2"       # -f files in order, before positional files
+same_file -e '9 p' -f "$tmpdir/s1" -e '8 p' "$tmpdir/s2"   # options in command-line order
+same_file -f "$tmpdir/s1" -e '9 p' "$tmpdir/s2"            # -f before a later -e
+same_file --file="$tmpdir/s1" "$tmpdir/s2"   # long option
+same_file -f "$tmpdir/s1" -                  # - reads standard input (closed here)
+same_file -f "$tmpdir/nope" "$tmpdir/s2"     # unreadable -f: both error, later files still run
 same_file "$tmpdir"                          # a directory: both error
 
 # The shipped example scripts must produce identical output under rpn and dc

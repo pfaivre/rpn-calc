@@ -41,7 +41,5 @@ void printUsage(const char *progName);
 
 void printVersion(const char *version, const char *copyright);
 
-[[nodiscard]] char *strAppend(char *dest, const char *src);
-
 #endif
 
