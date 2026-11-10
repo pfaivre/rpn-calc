@@ -334,6 +334,43 @@ test_stack "1 2 r r f"  "2" "1"
 test "r f"  ""
 test "1 r f"  "1"
 
+# R rotates the top n values by one position: a positive n moves the bottom
+# of the rotated segment to the top (the top value becomes second from top)
+test_stack "1 2 3 4 2 R f"  "3" "4" "2" "1"
+test_stack "1 2 3 4 3 R f"  "2" "4" "3" "1"
+
+# A negative n rotates the other way: the top value moves to the bottom of
+# the rotated segment
+test_stack "1 2 3 4 _3 R f"  "3" "2" "4" "1"
+test_stack "1 2 3 4 _2 R f"  "3" "4" "2" "1"
+
+# The count is truncated to its integer part
+test_stack "1 2 3 4 2.9 R f"  "3" "4" "2" "1"
+test_stack "1 2 3 4 _2.9 R f"  "3" "4" "2" "1"
+
+# n = 0 and n = 1 are no-ops; a count >= the stack size rotates the whole
+# stack once (as in dc)
+test_stack "1 2 3 4 0 R f"  "4" "3" "2" "1"
+test_stack "1 2 3 4 1 R f"  "4" "3" "2" "1"
+test_stack "1 2 3 4 6 R f"  "1" "4" "3" "2"
+test_stack "1 2 3 8 R f"     "1" "3" "2"
+test_stack "1 2 3 _8 R f"    "2" "1" "3"
+
+# A huge count rotates the whole stack once (arbitrary precision; dc punts
+# with "value overflows simple integer" and does not rotate)
+test_stack "1 2 3 2 100 ^ R f"  "1" "3" "2"
+test_stack "1 2 3 0 2 100 ^ - R f"  "2" "1" "3"   # huge negative count: the other way
+
+# R rotates strings like any other value; fewer than two values left after
+# popping the count is a no-op
+test_stack "1 [ab] 2 2 R f"  "ab" "2" "1"
+test "5 1 R f"  "5"
+test "1 R f"  ""
+
+# A string count is an error and the operands stay on the stack (as in dc)
+test_error_stack "1 2 [s] R f"  $'s\n2\n1'  "non-numeric value"
+test_error "R"  "stack underflow"
+
 # Clear then push
 test "5 c 3 p"  "3"
 
@@ -401,7 +438,8 @@ test_lines ""  ''
 # ===== COMMAND LINE =====
 
 test_e "2" -e "1 1 + p"
-test_e "2" -e "1 1" -e "+ p"   # multiple -e are concatenated
+test_e "2" -e "1 1" -e "+ p"   # multiple -e run in command-line order
+test_e "2" -e "1 Q" -e "2 p"   # Q unwinds only its own -e frame (as in dc)
 test_e "2" --expression="1 1 + p"
 test_contains "rpn 0.1" -V
 test_contains "rpn 0.1" --version
@@ -1100,6 +1138,58 @@ if [ -n "$r" ] || [ "$code" != "1" ] || ! grep -q "could not read" "$tmpd/err"; 
     failures=$((failures+1)); echo "FAIL directory arg: out='$r' code=$code err='$(cat "$tmpd/err")'"
 fi
 
+# ===== -f / --file (script files given as options) =====
+# -f files run in command-line order, interleaved with -e as given, and
+# before positional files (as in dc)
+
+tests_run=$((tests_run + 1))
+r=$(./rpn -f "$tmpd/a.rpn" -f "$tmpd/b.rpn" </dev/null 2>/dev/null)
+[ "$r" = $'1\n4\n5' ] || { failures=$((failures+1)); echo "FAIL -f in order: got '$r'"; }
+
+tests_run=$((tests_run + 1))
+r=$(./rpn -e '9 p' -f "$tmpd/a.rpn" "$tmpd/b.rpn" </dev/null 2>/dev/null)
+[ "$r" = $'9\n1\n4\n5' ] || { failures=$((failures+1)); echo "FAIL -e -f positional order: got '$r'"; }
+
+# options run in the order given: here -f runs before -e
+tests_run=$((tests_run + 1))
+r=$(./rpn -f "$tmpd/a.rpn" -e '9 p' "$tmpd/b.rpn" </dev/null 2>/dev/null)
+[ "$r" = $'1\n4\n9\n5' ] || { failures=$((failures+1)); echo "FAIL -f -e interleaved: got '$r'"; }
+
+# --file= long option
+tests_run=$((tests_run + 1))
+r=$(./rpn --file="$tmpd/b.rpn" </dev/null 2>/dev/null)
+[ "$r" = "5" ] || { failures=$((failures+1)); echo "FAIL --file: got '$r'"; }
+
+# -f - reads standard input
+tests_run=$((tests_run + 1))
+r=$(printf '7 p\n' | ./rpn -f - 2>/dev/null)
+[ "$r" = "7" ] || { failures=$((failures+1)); echo "FAIL -f -: got '$r'"; }
+
+# positional - reads standard input, after the options
+tests_run=$((tests_run + 1))
+r=$(printf '8 p\n' | ./rpn -e '3 p' - 2>/dev/null)
+[ "$r" = $'3\n8' ] || { failures=$((failures+1)); echo "FAIL positional -: got '$r'"; }
+
+# stdin is NOT read when only -e/-f options are given (as in dc) ...
+tests_run=$((tests_run + 1))
+r=$(printf '7 p\n' | ./rpn -f "$tmpd/a.rpn" 2>/dev/null)
+[ "$r" = $'1\n4' ] || { failures=$((failures+1)); echo "FAIL -f only, no stdin: got '$r'"; }
+
+# ... but it is read after positional files
+tests_run=$((tests_run + 1))
+r=$(printf '7 p\n' | ./rpn -f "$tmpd/a.rpn" "$tmpd/b.rpn" 2>/dev/null)
+[ "$r" = $'1\n4\n5\n7' ] || { failures=$((failures+1)); echo "FAIL -f + positional, stdin: got '$r'"; }
+
+# an unreadable -f file is an error (exit 1) but later arguments still run
+tests_run=$((tests_run + 1))
+r=$(./rpn -f "$tmpd/nope" "$tmpd/b.rpn" </dev/null 2>"$tmpd/err"); code=$?
+if [ "$r" != "5" ] || [ "$code" != "1" ] || ! grep -q "could not open file" "$tmpd/err"; then
+    failures=$((failures+1)); echo "FAIL missing -f file: out='$r' code=$code err='$(cat "$tmpd/err")'"
+fi
+
+# -f without an argument is a usage error
+test_exit 1 -f
+
 rm -rf "$tmpd"
 
 # ===== | (MODULAR EXPONENTIATION) =====
@@ -1137,6 +1227,33 @@ test_error "|"  "stack underflow"
 test_error "1 2 |"  "stack underflow"
 test_error_stack "2 3 0 | f"  $'0\n3\n2'  "remainder by zero"
 test_error "[a] 2 3 |"  "non-numeric value"
+
+# ===== SHIPPED EXAMPLES =====
+# (the dc compliance suite also runs these under GNU dc and requires identical
+# output; here they are pinned under rpn alone so they are covered without dc)
+
+# Miller-Rabin: 2^61-1 prime, 561 composite, 2^64+1 composite, 10^9+7 prime,
+# 10^9+8 even, 2^89-1 prime, 2047 composite
+tests_run=$((tests_run + 1))
+r=$(./rpn examples/miller_rabin.rpn </dev/null 2>/dev/null)
+[ "$r" = $'1\n0\n0\n1\n0\n1\n0' ] || { failures=$((failures+1)); echo "FAIL miller_rabin.rpn: got '$r'"; }
+
+# Game of Life: 8 generations of a 6-row grid plus a blank separator = 56 lines
+tests_run=$((tests_run + 1))
+lines=$(./rpn examples/game_of_life.rpn </dev/null 2>/dev/null | wc -l)
+row3=$(./rpn examples/game_of_life.rpn </dev/null 2>/dev/null | sed -n 3p)
+if [ "$lines" != "56" ] || [ "$row3" != ".#.#......" ]; then
+    failures=$((failures+1)); echo "FAIL game_of_life.rpn: lines=$lines row3='$row3'"
+fi
+
+# Mandelbrot 40x20 + Julia 50x18 (window cropped to the set at the same zoom),
+# plus separators = 40 lines, with the solid interior (runs of X) in both
+tests_run=$((tests_run + 1))
+lines=$(./rpn examples/mandelbrot.rpn </dev/null 2>/dev/null | wc -l)
+solid=$(./rpn examples/mandelbrot.rpn </dev/null 2>/dev/null | grep -c 'XXXXX')
+if [ "$lines" != "40" ] || [ "$solid" -lt "2" ]; then
+    failures=$((failures+1)); echo "FAIL mandelbrot.rpn: lines=$lines solid_rows=$solid"
+fi
 
 # ===== SUMMARY =====
 

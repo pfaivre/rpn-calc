@@ -28,9 +28,7 @@ SOFTWARE.
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
-#include <stdckdint.h>
 
 #include "io.h"
 
@@ -85,6 +83,7 @@ bool stdin_is_tty(void) {
 void printUsage(const char *progName) {
     printf("Usage: %s [OPTION] [file...]\n", progName);
     puts("  -e, --expression=EXPR    evaluate expression");
+    puts("  -f, --file=FILE          evaluate contents of file");
     puts("  -h, --help               display this help and exit");
     puts("  -V, --version            output version information and exit");
     puts("  file...                  read and execute script files, in order");
@@ -97,42 +96,5 @@ void printVersion(const char *version, const char *copyright) {
     puts("This is free software; see the source for copying conditions.  There is NO");
     puts("warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE,");
     puts("to the extent permitted by law.");
-}
-
-/**
- * Allocate the space to concatenate two strings and copy src at the end of dest.
- * @param dest String to modify
- * @param src String to append to dest
- * @return The new pointer location
- */
-char *strAppend(char *dest, const char *src) {
-    size_t src_len = strlen(src);
-    size_t size;
-
-    // If not allocated yet, just copy
-    if (dest == NULL) {
-        if (ckd_add(&size, src_len, (size_t) 1))
-            rpn_fatal("expression too large");
-
-        dest = malloc(size);
-        if (!dest)
-            rpn_fatal("memory allocation error");
-
-        memcpy(dest, src, size);  // copies the terminating NUL as well
-    }
-    // Otherwise, concatenate them
-    else {
-        size_t dest_len = strlen(dest);
-        if (ckd_add(&size, dest_len, src_len) || ckd_add(&size, size, (size_t) 1))
-            rpn_fatal("expression too large");
-
-        dest = realloc(dest, size);
-        if (!dest)
-            rpn_fatal("memory allocation error");
-
-        memcpy(dest + dest_len, src, src_len + 1);  // copies the terminating NUL as well
-    }
-
-    return dest;
 }
 

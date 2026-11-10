@@ -4,7 +4,8 @@ A humble dc clone, almost entirely compliant with it, with an emphasis on arithm
 ## Synopsis
 ```sh
 rpn [-V] [--version] [-h] [--help]
-    [-e scriptexpression] [--expression=scriptexpression] [file...]
+    [-e scriptexpression] [--expression=scriptexpression]
+    [-f scriptfile] [--file=scriptfile] [file...]
 ```
 
 ## Description
@@ -36,22 +37,31 @@ Print a usage message briefly summarizing these command-line options, then exit.
 ```sh
 -e, --expression=script
 ```
-Add the commands in script to the set of commands to be run. Multiple `-e`
-options are concatenated. `-e` expressions run before any script files.
+Execute the commands in script, one macro level above the top level (so `q`/`Q`
+counting matches dc). Multiple `-e` options run in command-line order,
+interleaved with `-f` files as given.
+
+```sh
+-f, --file=scriptfile
+```
+Read and execute scriptfile where it appears on the command line, in order
+interleaved with `-e` options. The file name `-` reads the standard input.
 
 ```sh
 file...
 ```
-Read and execute each script file, in order, one line at a time (like standard
-input lines; the stack, registers, scale and bases persist across files). An
-unreadable file is an error but does not stop the session. After script files,
-standard input is read (as in dc); with `-e` and no files, standard input is
-not read.
+Read and execute each script file, in order, after all options, one line at a
+time (like standard input lines; the stack, registers, scale and bases persist
+across files). The file name `-` reads the standard input. An unreadable file
+is an error but does not stop the session. After positional files, standard
+input is read (as in dc); with only `-e`/`-f` options and no positional file,
+standard input is not read.
 
 ## Input
-Without `-e` or files, expressions are read from the standard input, one per
-line; the stack persists across lines. With script files, they are read first
-(in order) and the standard input follows them. Spaces, tabs and newlines separate tokens, and
+Without any `-e`, `-f` or file argument, expressions are read from the
+standard input, one per line; the stack persists across lines. With positional
+files, the `-e`/`-f` options run first (in command-line order), then the files
+in order, and the standard input follows them. Spaces, tabs and newlines separate tokens, and
 spaces may be omitted between tokens (`2 3*4+p`). Negative numbers are written
 with an underscore prefix (`_5`). Numbers may have a decimal point (`1.5`,
 `.5`, `1.`); a second `.` starts a new token, so `1..2` is read as `1.` then
@@ -78,8 +88,14 @@ $ ./rpn
 ## Examples
 `examples/demo.rpn` tours most commands — arithmetic, scale, bases, stack
 operations, strings, macros, registers, arrays, conditionals, loops, `q`/`Q`.
-`examples/fibonacci.rpn` is a small loop demo. Both run identically under rpn
-and GNU dc, and are exercised by the dc compliance suite:
+`examples/fibonacci.rpn` is a small loop demo. `examples/game_of_life.rpn` runs
+Conway's Game of Life on a register array (a glider for 8 generations),
+`examples/miller_rabin.rpn` is a Miller-Rabin primality test built on `|`
+modular exponentiation, and `examples/mandelbrot.rpn` renders the Mandelbrot
+and a Julia set in ASCII using the scale factor `k` for fixed-point complex
+arithmetic — three examples of the Turing-complete macro language.
+All run identically under rpn and GNU dc, and are exercised by the dc
+compliance suite:
 
 ```sh
 $ ./rpn examples/demo.rpn
@@ -135,6 +151,8 @@ Numbers are stored in base 10 internally: the input base converts digits at pars
 `d` Duplicates the top value of the stack.
 
 `r` Swaps the two top values of the stack. With fewer than two values on the stack it does nothing (as in dc).
+
+`R` Pops a count `n` (its integer part) and rotates the top `min(|n|, size)` values of the stack by one position: for a positive `n` the bottom of the rotated segment moves to the top (the top value becomes the second from the top), for a negative `n` the top moves to the bottom. A count whose magnitude is at least the stack size rotates the whole stack once; `n = 0` is a no-op. A string count is an error and stays on the stack.
 
 `c` Clears the stack.
 
@@ -217,13 +235,14 @@ For the commands listed above, rpn behaves like dc (checked against GNU dc 1.5.2
   scale rules, as in dc.
 - String literals `[...]` (with nested brackets), and printing them with `p`, `n`, `P` and `f`: `p` adds a trailing newline, `n` and `P` pop the value and print without one, `f` prints one value per line, top first. Arithmetic on a string reports `non-numeric value` and leaves the operands on the stack, as in dc.
 - Macro execution with `x`: a string is popped and run as commands on the same stack, macros nest, and `x` on a number leaves the stack untouched.
+- `R` rotation of the top `min(|n|, size)` stack values by one position (positive `n`: segment bottom to top; negative `n`: the other way; a count of magnitude >= the stack size rotates the whole stack once; the count is truncated to its integer part).
 - Registers: `s`/`l`/`S`/`L` on a per-register value stack (with `s` replacing the content, `l` peeking, `L` erroring on an empty register stack, and `l` on an empty register loading 0), and `:`/`;` arrays per register (index on top, missing index loads 0, negative or non-numeric index rejected with the operands kept, values may be strings, a register's stack and array are independent).
 - Conditionals `>r`, `<r`, `=r`, `!>r`, `!<r`, `!=r`: two values popped and compared as numbers (top against second), the register executed as a macro when the condition holds, without being consumed; a string operand reports `non-numeric value` with the operands kept.
 - `q` (quit two levels, exiting the program at the top level or in a directly-called macro) and `Q` (pop a count, quit that many levels, never exit; over-depth counts still quit the available levels and invalid counts are errors, as in dc).
 - Input/output bases `i`/`I`/`o`/`O` in 2..16: digits `0`-`9` and `A`-`F` are read in the input base (letters keep their face value even beyond the base), numbers are stored base 10 internally, and printing converts to the output base — integer part in that base, fraction with `ceil(log_base(10^scale))` digits, uppercase digits, no leading zero before the point, zero as `0`. `P` prints bytes of the integer part in any base.
 - Stack introspection: `z` pushes the stack depth, `Z` pops and pushes the decimal digit count of a number (or character count of a string), `X` pops and pushes the scale of the value.
 - `|` modular exponentiation: `b^e mod m` with arbitrarily large exponents; the base and exponent are truncated to integers, the modulus keeps its scale, and the result scale is `max(scale(base), scale(modulus))`.
-- The `-e` option, executed one macro level above the top level as in dc, and reading expressions from standard input without it.
+- The `-e` and `-f` options, executed in command-line order (each `-e` one macro level above the top level, as in dc), positional files after all options, `-` as standard input, and standard input read at the end only when a positional file was given or no `-e`/`-f`/file argument was given at all.
 
 rpn deliberately differs from dc in the following ways:
 
@@ -250,6 +269,10 @@ rpn deliberately differs from dc in the following ways:
   pasted expression execute arbitrary commands. rpn reports `!` as
   unimplemented. This is a security boundary, not a missing feature (see
   "Security" below).
+- The `a` command (number to its low byte as a string, string to its first
+  character) is deprecated in dc itself, so rpn deliberately does not
+  implement it either: rpn reports `a` as unimplemented, where dc 1.5.2
+  still computes it behind a deprecation warning.
 - An unknown command such as `w` is reported as unimplemented. A `[...]`
   literal not closed on the same line is an error, where dc keeps reading the
   following lines into the string.
@@ -266,6 +289,9 @@ rpn deliberately differs from dc in the following ways:
   would exceed 32 MiB, is rejected with `exponent too large in raise`, while
   a huge negative exponent is computed exactly (0, 1 or _1), where dc gives
   up with the same error.
+- A rotation count too large for a C long makes dc punt ("value overflows
+  simple integer") and skip the rotation; rpn's arbitrary-precision count
+  rotates the whole stack once.
 
 ## Performance
 `make bench` (or `bash tests/bench.sh`, needs dc installed) times rpn against
@@ -281,14 +307,16 @@ results on one machine (Intel(R) Core(TM) i5-10600KF CPU @ 4.10GHz), wall time i
 | `v` at k=500 | 1 | 7 |
 | sum 1..100000 via macro loop | 2 | 57 |
 | countdown 100000 via loop | 1 | 41 |
+| R rotates a 900-deep stack 80k times | 35 | 211 |
 | factorial 900 (recursive loop) | 2 | 5 |
-| `|` modpow, 60-digit exponent | 1 | 1 |
+| `\|` modpow, 60-digit exponent | 1 | 1 |
 | division at k=500, big multiply | 1 | 1 |
 
 rpn is much faster on parsing (GMP `mpz_set_str` instead of digit-by-digit
-accumulation), big `^`, and calculator loops (array-backed stack vs a linked
-list); `|` is at parity since both use GMP's modular exponentiation. Small
-operations are dominated by process startup (~1 ms) for both.
+accumulation), big `^`, calculator loops, and `R` rotation (array-backed stack:
+one contiguous memmove vs a linked-list walk); `|` is at parity since both use
+GMP's modular exponentiation. Small operations are dominated by process
+startup (~1 ms) for both.
 
 ## Security
 

@@ -43,4 +43,10 @@ bench 'modpow, 60-digit exponent' '7 1111111111111111111111111111111111111111111
 bench 'factorial 900 (loop)'     '900 sn 1 sa [la ln * sa ln 1 - sn 0 ln >m] sm lmx la p'
 bench 'sum 1..100000 (loop)'     '0 sa 100000 sn [la ln + sa ln 1 - sn 0 ln >m] sm lmx la p'
 bench 'countdown 100000 (loop)'  '100000 sc [lc 1 - sc 0 lc >m] sm lmx'
+
+# R rotation: build a 900-deep stack, then rotate the whole stack 100 times
+# per loop iteration over 800 iterations (macro nesting caps loops at ~1000)
+rot_body=$(printf '900 R %.0s' $(seq 1 100))
+bench 'R rotate 900-stack 80k times' "900 sn [ln d 1 - sn 0 ln >m] sm lmx 800 sc [${rot_body} lc 1 - sc 0 lc >m] sm lmx"
+
 bench 'big multiplication'       '99999999999999999999 99999999999999999999 * p'

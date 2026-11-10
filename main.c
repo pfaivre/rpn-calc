@@ -61,72 +61,96 @@ static Stack run_lines(Stack s, Registers regs, FILE *stream, const char *name) 
     return s;
 }
 
-int main(int argc, char **argv) {
-    char *expression = NULL;
+/**
+ * Read and execute a script file by name, one line at a time; the name "-"
+ * reads the standard input. An unreadable file is an error but does not stop
+ * the session.
+ * @param s Stack to modify
+ * @param regs Register file to modify
+ * @param path File path, or "-" for standard input
+ * @return The stack after the parsed lines
+ */
+static Stack run_file(Stack s, Registers regs, const char *path) {
+    if (strcmp(path, "-") == 0)
+        return run_lines(s, regs, stdin, "standard input");
+    FILE *f = fopen(path, "r");
+    if (!f) {
+        calc_report_errorf("could not open file %s: %s", path, strerror(errno));
+        return s;
+    }
+    s = run_lines(s, regs, f, path);
+    fclose(f);
+    return s;
+}
 
-    while (1) {
+/**
+ * Free the stack and register file, then exit with the given status. Every
+ * exit path from main goes through here so no allocation is left behind.
+ * @param s Stack to free
+ * @param regs Register file to free
+ * @param code Exit status
+ */
+[[noreturn]] static void exit_clean(Stack s, Registers regs, int code) {
+    stack_delete(s);
+    registers_delete(regs);
+    exit(code);
+}
+
+int main(int argc, char **argv) {
+    Stack s = stack_init();
+    Registers regs = registers_init();
+    bool saw_opt_script = false;  // whether any -e or -f option was given
+
+    // Options are processed in command-line order, as in dc: each -e
+    // expression runs one macro level above the top level (depth 1, like
+    // dc's -e strings), each -f file is read and executed where it appears
+    while (!calc_quit_requested()) {
         int option_index = 0;
         char option;
         static struct option long_options[] = {
             {"expression", required_argument, 0, 'e'},
+            {"file",       required_argument, 0, 'f'},
             {"help",       no_argument,       0, 'h'},
             {"version",    no_argument,       0, 'V'},
             {0,            0,                 0,  0 }
         };
 
-        option = getopt_long(argc, argv, "e:hV", long_options, &option_index);
+        option = getopt_long(argc, argv, "e:f:hV", long_options, &option_index);
 
         if (option == -1)
             break;
 
         switch (option) {
             case 'e':
-                expression = strAppend(expression, " "); // in case of multiple -e
-                expression = strAppend(expression, optarg);
+                saw_opt_script = true;
+                s = calc_parse_expression(s, regs, optarg);
+                break;
+            case 'f':
+                saw_opt_script = true;
+                s = run_file(s, regs, optarg);
                 break;
             case 'h':
                 printUsage(argv[0]);
-                exit(0);
+                exit_clean(s, regs, 0);
             case 'V':
                 printVersion(VERSION, COPYRIGHT);
-                exit(0);
+                exit_clean(s, regs, 0);
             default:
                 printUsage(argv[0]);
-                exit(1);
+                exit_clean(s, regs, 1);
         }
     }
 
-    Stack s = stack_init();
-    Registers regs = registers_init();
+    // Positional script files, in order, after all options (as in dc)
+    for (int i = optind; i < argc && !calc_quit_requested(); i++)
+        s = run_file(s, regs, argv[i]);
 
-    // Option -e: evaluate the concatenated expressions as one input, at
-    // macro depth 1 like dc's -e strings
-    if (expression) {
-        s = calc_parse_expression(s, regs, expression);
-        free(expression);
-    }
-
-    // Script files, in order, one line at a time; an unreadable file is an
-    // error but does not stop the session
-    for (int i = optind; i < argc; i++) {
-        if (calc_quit_requested())
-            break;
-        FILE *f = fopen(argv[i], "r");
-        if (!f) {
-            calc_report_errorf("could not open file %s: %s", argv[i], strerror(errno));
-            continue;
-        }
-        s = run_lines(s, regs, f, argv[i]);
-        fclose(f);
-    }
-
-    // Standard input, one line per line: after script files (as in dc), or
-    // when neither -e nor files were given
-    if ((optind < argc || !expression) && !calc_quit_requested())
+    // Standard input, one line per line: after positional files, or when no
+    // -e, -f or file argument was given at all (as in dc)
+    bool read_stdin = optind < argc || !saw_opt_script;
+    if (read_stdin && !calc_quit_requested())
         s = run_lines(s, regs, stdin, "standard input");
 
-    stack_delete(s);
-    registers_delete(regs);
-    return calc_had_error() ? 1 : 0;
+    exit_clean(s, regs, calc_had_error() ? 1 : 0);
 }
 

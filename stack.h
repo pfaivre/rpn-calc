@@ -113,6 +113,17 @@ bool stack_hasAtLeast(Stack, int);
 
 [[nodiscard]] Stack stack_clear(Stack);
 
+/**
+ * Rotate the top m values of the stack by one position (m is clamped to the
+ * stack size): reverse=false moves the bottom of the rotated segment to the
+ * top, reverse=true moves the top to the bottom. Fewer than two values to
+ * rotate is a no-op.
+ * @param s Stack to rotate
+ * @param m Number of top values to rotate
+ * @param reverse Direction of the rotation
+ */
+void stack_rotate_top(Stack s, size_t m, bool reverse);
+
 Stack stack_delete(Stack);
 
 #endif

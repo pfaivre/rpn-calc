@@ -132,7 +132,7 @@ Write new code as if it will be audited against these rubrics:
 
 - The project uses GMP (GNU Multiple Precision Arithmetic Library)
 - Negative numbers are represented with underscore prefix (e.g., `_5`)
-- The calculator supports basic RPN operations: +, -, *, /, %, ~, ^, |, v, c, p, n, P, f, d, r, x, ?, q, Q, k, K, i, I, o, O, z, Z, X, decimal numbers (1.5, .5), string literals [...], registers (s, l, S, L, :, ;) and conditionals (> < = !> !< != with a register name)
+- The calculator supports basic RPN operations: +, -, *, /, %, ~, ^, |, v, c, p, n, P, f, d, r, R, x, ?, q, Q, k, K, i, I, o, O, z, Z, X, decimal numbers (1.5, .5), string literals [...], registers (s, l, S, L, :, ;) and conditionals (> < = !> !< != with a register name)
 - Error messages are written to stderr
 - The codebase follows defensive programming practices
 

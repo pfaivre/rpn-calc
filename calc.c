@@ -770,6 +770,41 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
         return s;
     }
 
+    // R: pop a count n (its integer part) and rotate the top min(|n|, size)
+    // values of the stack by one position: for a positive n the bottom of
+    // the rotated segment moves to the top (so the top value becomes the
+    // second from the top), for a negative n the top moves to the bottom.
+    // A count of magnitude >= the stack size rotates the whole stack once;
+    // n = 0 and a stack of one value are no-ops. A string count is an error
+    // and stays on the stack.
+    if (strcmp(command, "R") == 0) {
+        if (!stack_hasAtLeast(s, 1)) {
+            _calc_error("stack underflow");
+            return s;
+        }
+        mpz_t n;
+        mpz_init(n);
+        if (!_calc_int_part_into(stack_top(s), n)) {
+            _calc_error("non-numeric value");
+            mpz_clear(n);
+            return s;
+        }
+        Value count;
+        s = stack_pop(s, &count);
+        value_clear(&count);
+        bool neg = mpz_sgn(n) < 0;
+        mpz_abs(n, n);
+        size_t m = s->size;
+        if (mpz_fits_ulong_p(n)) {
+            unsigned long un = mpz_get_ui(n);
+            if (un < m)
+                m = un;
+        }
+        mpz_clear(n);
+        stack_rotate_top(s, m, neg);
+        return s;
+    }
+
     // Execute the top value as a macro (x): a string is popped and its
     // contents are run as commands on the same stack, so macros can nest.
     // A number is left untouched.
