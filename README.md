@@ -89,9 +89,11 @@ $ ./rpn
 `examples/demo.rpn` tours most commands — arithmetic, scale, bases, stack
 operations, strings, macros, registers, arrays, conditionals, loops, `q`/`Q`.
 `examples/fibonacci.rpn` is a small loop demo. `examples/game_of_life.rpn` runs
-Conway's Game of Life on a register array (a glider for 8 generations), and
+Conway's Game of Life on a register array (a glider for 8 generations),
 `examples/miller_rabin.rpn` is a Miller-Rabin primality test built on `|`
-modular exponentiation — two examples of the Turing-complete macro language.
+modular exponentiation, and `examples/mandelbrot.rpn` renders the Mandelbrot
+and a Julia set in ASCII using the scale factor `k` for fixed-point complex
+arithmetic — three examples of the Turing-complete macro language.
 All run identically under rpn and GNU dc, and are exercised by the dc
 compliance suite:
 

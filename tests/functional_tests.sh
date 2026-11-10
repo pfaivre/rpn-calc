@@ -1246,6 +1246,15 @@ if [ "$lines" != "56" ] || [ "$row3" != ".#.#......" ]; then
     failures=$((failures+1)); echo "FAIL game_of_life.rpn: lines=$lines row3='$row3'"
 fi
 
+# Mandelbrot + Julia: two 40x20 renders plus separators = 42 lines, with the
+# solid interior (runs of X) visible in both
+tests_run=$((tests_run + 1))
+lines=$(./rpn examples/mandelbrot.rpn </dev/null 2>/dev/null | wc -l)
+solid=$(./rpn examples/mandelbrot.rpn </dev/null 2>/dev/null | grep -c 'XXXXX')
+if [ "$lines" != "42" ] || [ "$solid" -lt "2" ]; then
+    failures=$((failures+1)); echo "FAIL mandelbrot.rpn: lines=$lines solid_rows=$solid"
+fi
+
 # ===== SUMMARY =====
 
 if [ "$failures" -eq 0 ]; then

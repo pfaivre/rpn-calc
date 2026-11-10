@@ -301,6 +301,7 @@ same_file examples/demo.rpn
 same_file examples/fibonacci.rpn
 same_file examples/game_of_life.rpn
 same_file examples/miller_rabin.rpn
+same_file examples/mandelbrot.rpn
 
 # ===== IDENTICAL TO dc: | (modular exponentiation) =====
 same "2 3 5 | p"          "3"
