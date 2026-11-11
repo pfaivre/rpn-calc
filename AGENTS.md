@@ -12,7 +12,10 @@ The project uses a simple Makefile-based build system:
   static `rpn.exe`; `make windows` cross-compiles it from Linux with
   `x86_64-w64-mingw32-gcc` (needs `mingw64-gcc` + `mingw64-gmp`). MSVC is not
   supported (no C23 `<stdckdint.h>`). CI builds and tests on a `windows-latest`
-  runner, and releases ship `rpn-windows-x86_64.exe`
+  runner, and releases ship `rpn-windows-x86_64.exe`. `make windows` links
+  `-static` only when the MinGW sysroot has a static `libgmp.a` (MSYS2 does);
+  with a DLL-only GMP (e.g. Fedora's `mingw64-gmp`) the resulting `rpn.exe`
+  needs `libgmp-10.dll` next to it
 - **Static analysis**: `make check` (uses cppcheck)
 - **Run with valgrind**: `make valgrind`
 

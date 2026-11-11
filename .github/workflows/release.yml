@@ -38,7 +38,7 @@ jobs:
       with:
         msystem: MINGW64
         update: true
-        install: mingw-w64-x86_64-gcc mingw-w64-x86_64-gmp
+        install: mingw-w64-x86_64-gcc mingw-w64-x86_64-gmp make
 
     - name: build statically linked binary (linux)
       if: matrix.target.os == 'linux'
@@ -56,9 +56,11 @@ jobs:
       shell: "msys2 {0}"
       run: |
         mkdir -p dist
-        # -static: the .exe runs on any Windows x86_64, no MinGW/GMP DLLs needed
-        gcc -O2 -Wall -pedantic -std=c23 -static \
-          -o dist/rpn-${{ matrix.target.name }}.exe src/*.c -lgmp
+        # the makefile's OS=Windows_NT path builds a static rpn.exe (single
+        # source of truth for the compile flags); it runs on any Windows
+        # x86_64, no MinGW/GMP DLLs needed
+        make
+        cp rpn.exe dist/rpn-${{ matrix.target.name }}.exe
         strip dist/rpn-${{ matrix.target.name }}.exe
         ./dist/rpn-${{ matrix.target.name }}.exe -V
         ./dist/rpn-${{ matrix.target.name }}.exe -e "3 5 + 7 * p"

@@ -74,7 +74,7 @@ The exit status is 0 when every command succeeded, and 1 if any command failed
 (errors are reported on stderr) or an unknown option was given.
 
 ## Installation
-Building requires GCC 14 or newer.
+Building requires GCC 14 or newer (C23 support: `-std=c23` and `<stdckdint.h>`).
 
 This program depends on GNU MP library version 6 or above. It is available with
 the package `libgmp-dev` on Debian and derivative, as `gmp-devel` on Fedora or

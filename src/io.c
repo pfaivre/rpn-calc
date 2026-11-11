@@ -54,9 +54,12 @@ SOFTWARE.
  * The line can have arbitrary length and may contain NUL bytes; the
  * parser only sees up to the first NUL.
  * Portable replacement for getline(), which Windows does not provide.
+ * On Windows the stream is read in binary mode (see script_open/main), so a
+ * trailing CR of a CRLF line ending is stripped here.
  * @param stream The stream to read from
  * @return A newly allocated string holding the line without its trailing
- *         newline, an empty string for an empty line, or NULL at EOF
+ *         newline, an empty string for an empty line, or NULL at EOF or on
+ *         a read error (the caller reports it via ferror)
  */
 char *read_line_stream(FILE *stream) {
     size_t cap = 128;
@@ -78,10 +81,14 @@ char *read_line_stream(FILE *stream) {
         }
         line[len++] = (char) c;
     }
-    if (c == EOF && len == 0) {
-        free(line);
+    if (c == EOF && (len == 0 || ferror(stream))) {
+        free(line);  // like getline, a read error discards the partial line
         return NULL;
     }
+#ifdef _WIN32
+    if (len > 0 && line[len - 1] == '\r')  // strip the CR of a CRLF ending
+        len--;
+#endif
     line[len] = '\0';
     return line;
 }
@@ -95,12 +102,14 @@ char *read_line(void) {
 }
 
 /**
- * Open a script file for reading
+ * Open a script file for reading, in binary mode: on Windows text mode would
+ * treat byte 0x1A as EOF; CRLF line endings are handled by read_line_stream.
+ * ("rb" is identical to "r" on POSIX.)
  * @param path File path
  * @return The stream, or NULL on failure (errno set)
  */
 FILE *script_open(const char *path) {
-    return fopen(path, "r");
+    return fopen(path, "rb");
 }
 
 /**

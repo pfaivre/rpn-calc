@@ -112,10 +112,16 @@ static struct option long_options[] = {
 
 int main(int argc, char **argv) {
 #ifdef _WIN32
-    // Keep piped output byte-exact: text mode would translate LF to CRLF.
-    // Standard input stays in text mode so CRLF script files parse as on POSIX.
-    _setmode(_fileno(stdout), _O_BINARY);
-    _setmode(_fileno(stderr), _O_BINARY);
+    // Piped output must stay byte-exact (text mode would translate LF to
+    // CRLF); consoles keep text mode so output renders correctly. Piped
+    // input goes binary so byte 0x1A is data, not EOF, as on POSIX; an
+    // interactive console keeps text mode so Ctrl-Z still means EOF.
+    if (!stdin_is_tty())
+        _setmode(_fileno(stdin), _O_BINARY);
+    if (!_isatty(_fileno(stdout)))
+        _setmode(_fileno(stdout), _O_BINARY);
+    if (!_isatty(_fileno(stderr)))
+        _setmode(_fileno(stderr), _O_BINARY);
 #endif
     Stack s = stack_init();
     Registers regs = registers_init();

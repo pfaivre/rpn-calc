@@ -1131,12 +1131,14 @@ tests_run=$((tests_run + 1))
 r=$(./rpn "$tmpd/q.rpn" </dev/null 2>/dev/null)
 [ "$r" = "1" ] || { failures=$((failures+1)); echo "FAIL q in file: got '$r'"; }
 
-# a directory passed as a file argument is an error (exit 1), not silent EOF:
-# "could not read" on POSIX (fopen succeeds, the read fails), "could not open
-# file" on Windows (fopen itself fails with EACCES)
+# a directory passed as a file argument is an error (exit 1), not silent EOF.
+# The message is platform-pinned: "could not read" on POSIX (fopen succeeds,
+# the read fails with EISDIR), "could not open file" on Windows (fopen itself
+# fails with EACCES)
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) dir_msg="could not open file";; *) dir_msg="could not read";; esac
 tests_run=$((tests_run + 1))
 r=$(./rpn "$tmpd" </dev/null 2>"$tmpd/err"); code=$?
-if [ -n "$r" ] || [ "$code" != "1" ] || ! grep -Eq "could not (read|open file)" "$tmpd/err"; then
+if [ -n "$r" ] || [ "$code" != "1" ] || ! grep -qF "$dir_msg" "$tmpd/err"; then
     failures=$((failures+1)); echo "FAIL directory arg: out='$r' code=$code err='$(cat "$tmpd/err")'"
 fi
 
@@ -1189,13 +1191,19 @@ if [ "$r" != "5" ] || [ "$code" != "1" ] || ! grep -q "could not open file" "$tm
     failures=$((failures+1)); echo "FAIL missing -f file: out='$r' code=$code err='$(cat "$tmpd/err")'"
 fi
 
-# -f on a directory is an error, exit 1: "could not read" on POSIX, "could not
-# open file" on Windows (see the directory-arg test above)
+# -f on a directory is an error, exit 1, with the same platform-pinned
+# message as the directory-arg test above
 tests_run=$((tests_run + 1))
 r=$(./rpn -f "$tmpd" </dev/null 2>"$tmpd/err"); code=$?
-if [ -n "$r" ] || [ "$code" != "1" ] || ! grep -Eq "could not (read|open file)" "$tmpd/err"; then
+if [ -n "$r" ] || [ "$code" != "1" ] || ! grep -qF "$dir_msg" "$tmpd/err"; then
     failures=$((failures+1)); echo "FAIL -f directory: out='$r' code=$code err='$(cat "$tmpd/err")'"
 fi
+
+# byte 0x1A (Ctrl-Z) in piped input is data, not EOF, on every platform:
+# here it is an unknown command (error, exit 1) and the session continues
+tests_run=$((tests_run + 1))
+r=$(printf '5 p\n\x1a\n6 p\n' | ./rpn 2>/dev/null); code=$?
+[ "$r" = $'5\n6' ] && [ "$code" = "1" ] || { failures=$((failures+1)); echo "FAIL 0x1A byte: out='$r' code=$code"; }
 
 # an error inside a -f file sets exit 1 but does not stop the session
 tests_run=$((tests_run + 1))
