@@ -96,6 +96,21 @@ expect_ok "2 134217728 ^ c"
 expect_err "1000000 k 1 10 1000000 ^ / _268435456 ^" "exponent too large in raise"
 expect_err "0.5 _81000000 ^" "exponent too large in raise"
 
+# ===== Huge exponent with a unit/zero base (regression: SIGABRT) =====
+# Exponents above LONG_MAX used to wrap negative in (long) mpz_get_ui(e),
+# giving a negative result scale that aborted GMP inside pow10. They now
+# take the "too large" path (non-unit base) or the exact unit/zero result.
+expect_ok "1.0 9223372036854775813 ^ p"
+expect_ok "_1.00 18446744073709551615 ^ p"
+expect_ok "0.0 9223372036854775813 ^ X p"
+expect_err "2 9223372036854775813 ^" "exponent too large in raise"
+out=$(printf '1.0 9223372036854775813 ^ p\n0.0 9223372036854775813 ^ X p\n' | "$RPN_BIN" 2>/dev/null)
+tests_run=$((tests_run + 1))
+if [ "$out" != "$(printf '1.0\n1')" ]; then
+    failures=$((failures + 1))
+    echo "FAIL huge-exp unit/zero base: expected '1.0' and '1', got '$out'"
+fi
+
 # ===== Non-numeric operands on every numeric command =====
 expect_err "[s] 0 /" "non-numeric value"
 expect_err "0 [s] /" "non-numeric value"

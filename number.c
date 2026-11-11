@@ -589,7 +589,10 @@ const char *number_pow(const Value *base, const Value *exp, long k, Value *out) 
         long cap = sa > k ? sa : k;
         if (is_unit_base(base) || mpz_sgn(base->num) == 0) {
             long sa_n = 0;
-            bool big = !mpz_fits_ulong_p(e) || ckd_mul(&sa_n, sa, (long) mpz_get_ui(e));
+            // fits_slong, not fits_ulong: mpz_get_si must never wrap negative
+            // (exponents above LONG_MAX would yield a negative scale and
+            // abort GMP in pow10); short-circuit keeps the cast in range
+            bool big = !mpz_fits_slong_p(e) || ckd_mul(&sa_n, sa, mpz_get_si(e));
             long rs = big ? cap : (sa_n < cap ? sa_n : cap);  // min(sa*n, cap)
             if (mpz_sgn(base->num) == 0)
                 mpz_set_ui(rn, 0);
@@ -598,7 +601,10 @@ const char *number_pow(const Value *base, const Value *exp, long k, Value *out) 
             number_set(out, rn, rs);
         } else {
             long sa_n = 0;
-            bool big = !mpz_fits_ulong_p(e) || ckd_mul(&sa_n, sa, (long) mpz_get_ui(e));
+            // fits_slong, not fits_ulong: mpz_get_si must never wrap negative
+            // (exponents above LONG_MAX would yield a negative scale and
+            // abort GMP in pow10); short-circuit keeps the cast in range
+            bool big = !mpz_fits_slong_p(e) || ckd_mul(&sa_n, sa, mpz_get_si(e));
             long rs = big ? cap : (sa_n < cap ? sa_n : cap);  // min(sa*n, cap)
             if (big)
                 err = "exponent too large in raise";
