@@ -161,7 +161,7 @@ Stack stack_push_value(Stack s, Value v) {
 
 /**
  * Take the value at the top of the stack. Fatal if the stack is empty:
- * callers must guard with stack_hasAtLeast so a forgotten guard fails
+ * callers must guard with stack_has_at_least so a forgotten guard fails
  * loudly here instead of leaving *out uninitialized.
  * @param s Stack to take the value from
  * @param out pointer to store the taken value (ownership moves to the caller)
@@ -177,7 +177,7 @@ Stack stack_pop(Stack s, Value *out) {
 
 /**
  * Move the top value of one stack onto another: pop it from `from` and push
- * a copy onto `to`. Callers must guard `from` with stack_hasAtLeast.
+ * a copy onto `to`. Callers must guard `from` with stack_has_at_least.
  * @param from Stack to take the value from
  * @param to Stack to push the value onto
  */
@@ -192,7 +192,7 @@ void stack_move_top(Stack from, Stack to) {
  * Check if the stack has at least n elements
  * @return true if the is n or more elements in the stack
  */
-bool stack_hasAtLeast(Stack s, int n) {
+bool stack_has_at_least(Stack s, int n) {
     return n <= 0 || s->size >= (size_t) n;
 }
 

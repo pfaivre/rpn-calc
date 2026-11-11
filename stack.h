@@ -52,7 +52,7 @@ static inline Value *stack_second(Stack s) { return &s->vals[s->size - 2]; }
 /** The third value from the top (only valid with at least three values) */
 static inline Value *stack_third(Stack s) { return &s->vals[s->size - 3]; }
 
-Stack stack_init();
+[[nodiscard]] Stack stack_init();
 
 /** Release the resources held by a value (mpz_clear or free) */
 void value_clear(Value *v);
@@ -74,7 +74,7 @@ void value_clear(Value *v);
 
 /**
  * Move the top value of one stack onto another: pop it from `from` and push
- * a copy onto `to`. Callers must guard `from` with stack_hasAtLeast.
+ * a copy onto `to`. Callers must guard `from` with stack_has_at_least.
  * @param from Stack to take the value from
  * @param to Stack to push the value onto
  */
@@ -91,7 +91,7 @@ void stack_move_top(Stack from, Stack to);
  */
 [[nodiscard]] void *checked_grow(void *ptr, size_t *cap, size_t elem_size);
 
-bool stack_hasAtLeast(Stack, int);
+[[nodiscard]] bool stack_has_at_least(Stack, int);
 
 [[nodiscard]] Stack stack_clear(Stack);
 
@@ -106,6 +106,6 @@ bool stack_hasAtLeast(Stack, int);
  */
 void stack_rotate_top(Stack s, size_t m, bool reverse);
 
-Stack stack_delete(Stack);
+[[nodiscard]] Stack stack_delete(Stack);
 
 #endif

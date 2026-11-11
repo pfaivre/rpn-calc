@@ -147,7 +147,7 @@ static bool _calc_top_three_numeric(Stack s) {
  * @return true when the stack holds at least n values
  */
 static bool _calc_need(Stack s, int n) {
-    if (!stack_hasAtLeast(s, n)) {
+    if (!stack_has_at_least(s, n)) {
         _calc_error("stack underflow");
         return false;
     }
@@ -398,7 +398,7 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
         // loads 0
         case 'l': {
             Stack rs = register_stack(regs, name);
-            if (stack_hasAtLeast(rs, 1))
+            if (stack_has_at_least(rs, 1))
                 return stack_push_value(s, *stack_top(rs));
             return _calc_push_long(s, 0);
         }
@@ -413,7 +413,7 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
         // L: pop the register's stack top and push it onto the main stack
         case 'L': {
             Stack rs = register_stack(regs, name);
-            if (!stack_hasAtLeast(rs, 1)) {
+            if (!stack_has_at_least(rs, 1)) {
                 _calc_errorf("stack register '%c' is empty", name);
                 return s;
             }
@@ -565,7 +565,7 @@ static Stack _calc_conditional(Stack s, Registers regs, const char *op, unsigned
     // (0 when the register is empty), then run it if it is a string. The
     // register itself is not popped.
     Stack rs = register_stack(regs, name);
-    if (stack_hasAtLeast(rs, 1))
+    if (stack_has_at_least(rs, 1))
         s = stack_push_value(s, *stack_top(rs));
     else
         s = _calc_push_long(s, 0);
@@ -735,7 +735,7 @@ static Stack _calc_cmd_dup(Stack s, Registers regs, int depth) {
 /** r: swap the top two values of the stack (a no-op with fewer than two
  * values, as in dc) */
 static Stack _calc_cmd_swap(Stack s, Registers regs, int depth) {
-    if (!stack_hasAtLeast(s, 2))
+    if (!stack_has_at_least(s, 2))
         return s;
     Value tmp = *stack_top(s);
     *stack_top(s) = *stack_second(s);

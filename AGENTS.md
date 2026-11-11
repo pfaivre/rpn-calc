@@ -23,7 +23,7 @@ The build system compiles C code using GCC 14 or newer with the C23 standard and
 - Use clear, descriptive comments for functions and complex logic
 
 ### Naming Conventions
-- **Functions**: Use snake_case (e.g., `_calc_binary_op`, `stack_push`); a few legacy helpers predate this rule and keep their camelCase names (e.g., `_calc_proceed`, `bufferedInput`)
+- **Functions**: Use snake_case (e.g., `_calc_binary_op`, `stack_push`); a few legacy helpers predate this rule and keep their camelCase names (e.g., `_calc_proceed`)
 - **Variables**: Use snake_case (e.g., `mpz_t number`, `Stack s`)
 - **Constants**: Use UPPER_CASE (e.g., `STDIN_BUFFER_SIZE`)
 - **Types**: Use CamelCase for structs (e.g., `StructStack`), typedefs use the struct name (e.g., `Stack`)

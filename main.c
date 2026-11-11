@@ -91,7 +91,7 @@ static Stack run_file(Stack s, Registers regs, const char *path) {
  * @param code Exit status
  */
 [[noreturn]] static void exit_clean(Stack s, Registers regs, int code) {
-    stack_delete(s);
+    (void) stack_delete(s);  // the return value is always NULL
     registers_delete(regs);
     exit(code);
 }
@@ -132,13 +132,13 @@ int main(int argc, char **argv) {
                 s = run_file(s, regs, optarg);
                 break;
             case 'h':
-                printUsage(argv[0]);
+                print_usage(argv[0]);
                 exit_clean(s, regs, 0);
             case 'V':
-                printVersion(VERSION, COPYRIGHT);
+                print_version(VERSION, COPYRIGHT);
                 exit_clean(s, regs, 0);
             default:
-                printUsage(argv[0]);
+                print_usage(argv[0]);
                 exit_clean(s, regs, 1);
         }
     }

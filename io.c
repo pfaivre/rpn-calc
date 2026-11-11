@@ -89,7 +89,7 @@ bool stdin_is_tty(void) {
     return isatty(fileno(stdin));
 }
 
-void printUsage(const char *progName) {
+void print_usage(const char *progName) {
     printf("Usage: %s [OPTION] [file...]\n", progName);
     puts("  -e, --expression=EXPR    evaluate expression");
     puts("  -f, --file=FILE          evaluate contents of file");
@@ -98,7 +98,7 @@ void printUsage(const char *progName) {
     puts("  file...                  read and execute script files, in order");
 }
 
-void printVersion(const char *version, const char *copyright) {
+void print_version(const char *version, const char *copyright) {
     printf("rpn %s\n", version);
     puts("");
     puts(copyright);
