@@ -27,12 +27,21 @@ SOFTWARE.
 
 #include <stdio.h>
 
+/**
+ * Print a fatal error on stderr and exit with a non-zero status.
+ * Reserved for unrecoverable failures (allocation failure, size overflow,
+ * input too large): it exits immediately, intentionally without freeing
+ * the calculator state — only main's exit_clean does that.
+ */
 [[noreturn]] void rpn_fatal(const char *msg);
 
-char *read_line(void);
+[[nodiscard]] char *read_line(void);
 
 /** Read one line from a stream (until newline or EOF), like read_line */
-char *read_line_stream(FILE *stream);
+[[nodiscard]] char *read_line_stream(FILE *stream);
+
+/** Open a script file for reading; NULL on failure (errno set) */
+[[nodiscard]] FILE *script_open(const char *path);
 
 /** Whether the standard input is a terminal (which already echoes input) */
 bool stdin_is_tty(void);

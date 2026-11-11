@@ -72,6 +72,15 @@ char *read_line(void) {
 }
 
 /**
+ * Open a script file for reading
+ * @param path File path
+ * @return The stream, or NULL on failure (errno set)
+ */
+FILE *script_open(const char *path) {
+    return fopen(path, "r");
+}
+
+/**
  * Whether the standard input is a terminal (which already echoes what the
  * user types, so no explicit echo is needed)
  * @return true when stdin is a tty

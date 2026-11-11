@@ -73,7 +73,7 @@ static Stack run_lines(Stack s, Registers regs, FILE *stream, const char *name) 
 static Stack run_file(Stack s, Registers regs, const char *path) {
     if (strcmp(path, "-") == 0)
         return run_lines(s, regs, stdin, "standard input");
-    FILE *f = fopen(path, "r");
+    FILE *f = script_open(path);
     if (!f) {
         calc_report_errorf("could not open file %s: %s", path, strerror(errno));
         return s;
@@ -96,6 +96,15 @@ static Stack run_file(Stack s, Registers regs, const char *path) {
     exit(code);
 }
 
+/** Long options for getopt_long */
+static struct option long_options[] = {
+    {"expression", required_argument, 0, 'e'},
+    {"file",       required_argument, 0, 'f'},
+    {"help",       no_argument,       0, 'h'},
+    {"version",    no_argument,       0, 'V'},
+    {0,            0,                 0,  0 }
+};
+
 int main(int argc, char **argv) {
     Stack s = stack_init();
     Registers regs = registers_init();
@@ -107,13 +116,6 @@ int main(int argc, char **argv) {
     while (!calc_quit_requested()) {
         int option_index = 0;
         char option;
-        static struct option long_options[] = {
-            {"expression", required_argument, 0, 'e'},
-            {"file",       required_argument, 0, 'f'},
-            {"help",       no_argument,       0, 'h'},
-            {"version",    no_argument,       0, 'V'},
-            {0,            0,                 0,  0 }
-        };
 
         option = getopt_long(argc, argv, "e:f:hV", long_options, &option_index);
 
