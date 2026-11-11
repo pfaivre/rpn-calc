@@ -1187,6 +1187,21 @@ if [ "$r" != "5" ] || [ "$code" != "1" ] || ! grep -q "could not open file" "$tm
     failures=$((failures+1)); echo "FAIL missing -f file: out='$r' code=$code err='$(cat "$tmpd/err")'"
 fi
 
+# -f on a directory opens but fails to read: "could not read", exit 1
+tests_run=$((tests_run + 1))
+r=$(./rpn -f "$tmpd" </dev/null 2>"$tmpd/err"); code=$?
+if [ -n "$r" ] || [ "$code" != "1" ] || ! grep -q "could not read" "$tmpd/err"; then
+    failures=$((failures+1)); echo "FAIL -f directory: out='$r' code=$code err='$(cat "$tmpd/err")'"
+fi
+
+# an error inside a -f file sets exit 1 but does not stop the session
+tests_run=$((tests_run + 1))
+r=$(./rpn -f "$tmpd/bad.rpn" -f "$tmpd/b.rpn" </dev/null 2>/dev/null); code=$?
+[ "$r" = $'7\n5' ] && [ "$code" = "1" ] || { failures=$((failures+1)); echo "FAIL error in -f file: out='$r' code=$code"; }
+
+# over-depth Q reports the full message (count popped, still unwinds min(N, depth))
+test_e_error "Q command argument exceeded string execution depth" -e "9 Q 3 p"
+
 # -f without an argument is a usage error
 test_exit 1 -f
 
