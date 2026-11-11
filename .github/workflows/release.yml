@@ -57,7 +57,9 @@ jobs:
         merge-multiple: true
 
     - name: checksums
-      run: sha256sum dist/rpn-* > dist/SHA256SUMS
+      run: |
+        cd dist
+        sha256sum rpn-* > SHA256SUMS
 
     - name: create the GitHub release
       env:
