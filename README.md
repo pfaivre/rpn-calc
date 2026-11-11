@@ -74,7 +74,7 @@ The exit status is 0 when every command succeeded, and 1 if any command failed
 (errors are reported on stderr) or an unknown option was given.
 
 ## Installation
-Building requires GCC 14 or newer (C23 support: `-std=c23` and `<stdckdint.h>`).
+Building requires GCC 14 or newer.
 
 This program depends on GNU MP library version 6 or above. It is available with
 the package `libgmp-dev` on Debian and derivative, as `gmp-devel` on Fedora or
@@ -86,25 +86,18 @@ $ ./rpn
 ```
 
 ## Download
-Prebuilt statically linked binaries (Linux x86_64, no GMP installation needed)
-are available on the [releases page](https://github.com/pfaivre/rpn-calc/releases):
-download the `rpn-linux-x86_64` asset, `chmod +x` it and run it.
+Prebuilt statically linked binaries are available on the
+[releases page](https://github.com/pfaivre/rpn-calc/releases):
+`rpn-linux-x86_64` for Linux x86_64 (no GMP installation needed — `chmod +x` it
+and run it) and `rpn-windows-x86_64.exe` for Windows x86_64 (no MinGW or GMP
+DLLs needed).
 
 ## Examples
-`examples/demo.rpn` tours most commands — arithmetic, scale, bases, stack
-operations, strings, macros, registers, arrays, conditionals, loops, `q`/`Q`.
-`examples/fibonacci.rpn` is a small loop demo. `examples/game_of_life.rpn` runs
-Conway's Game of Life on a register array (a glider for 8 generations),
-`examples/miller_rabin.rpn` is a Miller-Rabin primality test built on `|`
-modular exponentiation, and `examples/mandelbrot.rpn` renders the Mandelbrot
-and a Julia set in ASCII using the scale factor `k` for fixed-point complex
-arithmetic — three examples of the Turing-complete macro language.
-All run identically under rpn and GNU dc, and are exercised by the dc
-compliance suite:
+[examples/](examples/) show what can be done with this calculator. You can try them with rpn or dc:
 
 ```sh
-$ ./rpn examples/demo.rpn
-$ dc examples/demo.rpn
+$ ./rpn examples/mandelbrot.rpn
+$ dc examples/mandelbrot.rpn
 ```
 
 ## Commands

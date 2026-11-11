@@ -39,7 +39,7 @@ SOFTWARE.
 
 /**
  * Read and execute lines from a stream until EOF or a top-level q. A read
- * error (e.g. a directory passed as a script file, where getline fails) is
+ * error (e.g. a directory passed as a script file, where the read fails) is
  * reported but does not stop the session.
  * @param s Stack to modify
  * @param regs Register file to modify

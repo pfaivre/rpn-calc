@@ -43,3 +43,29 @@ jobs:
       run: |
         ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 bash tests/functional_tests.sh
         ASAN_OPTIONS=detect_leaks=1 UBSAN_OPTIONS=halt_on_error=1 bash tests/adversarial_tests.sh
+
+  # Windows build via MSYS2/MinGW-w64: make detects OS=Windows_NT and builds
+  # a statically linked rpn.exe (mingw-w64 GCC supports -std=c23 and ships
+  # getopt.h; MSVC is not supported as it lacks C23 <stdckdint.h>)
+  windows:
+
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: "msys2 {msystem: MINGW64}"
+
+    steps:
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+    - name: install mingw-w64 gcc, gmp and make
+      run: pacman -S --noconfirm --needed mingw-w64-x86_64-gcc mingw-w64-x86_64-gmp make
+
+    - name: make
+      run: make
+
+    # dc is not available here, so the dc compliance suite is skipped
+    - name: run tests
+      run: |
+        bash tests/functional_tests.sh
+        bash tests/adversarial_tests.sh
