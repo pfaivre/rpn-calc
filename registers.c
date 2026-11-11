@@ -51,7 +51,7 @@ void registers_delete(Registers regs) {
     for (int i = 0; i < REGISTER_COUNT; i++) {
         Register *reg = &regs->regs[i];
         if (reg->stack)
-            stack_delete(reg->stack);
+            (void) stack_delete(reg->stack);  // the return value is always NULL
         for (size_t j = 0; j < reg->size; j++) {
             mpz_clear(reg->entries[j].index);
             value_clear(&reg->entries[j].val);

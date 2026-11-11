@@ -31,7 +31,7 @@ bench() {
         "$(awk -v r="$best_r" -v d="$best_d" 'BEGIN{ if (r==0) print "inf"; else printf "%.1fx slower than rpn", d/r }')"
 }
 
-echo "benchmarks: best of $N runs each, wall time in ms (rpn vs $(dc --version 2>&1 | head -1))"
+echo -e "\nbenchmarks: best of $N runs each, wall time in ms (rpn vs $(dc --version 2>&1 | head -1))"
 bench 'pow 2^1000000'            '2 1000000 ^ p'
 bench 'pow 2^3000000'            '2 3000000 ^ p'
 bench 'parse 100k-digit literal' "$(printf '1%.0s' $(seq 1 100000)) p"
@@ -50,3 +50,5 @@ rot_body=$(printf '900 R %.0s' $(seq 1 100))
 bench 'R rotate 900-stack 80k times' "900 sn [ln d 1 - sn 0 ln >m] sm lmx 800 sc [${rot_body} lc 1 - sc 0 lc >m] sm lmx"
 
 bench 'big multiplication'       '99999999999999999999 99999999999999999999 * p'
+
+echo ""

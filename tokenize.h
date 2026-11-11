@@ -28,25 +28,25 @@ SOFTWARE.
 #include <stdbool.h>
 #include <stddef.h>
 
-/**
- * Whether c continues the token being built
- * @param token Token built so far
- * @param len Length of token
- * @param c The next character
- * @return true when c belongs to the token being built
- */
-bool tokenize_continues(const char *token, size_t len, char c);
+/** The outcome of tokenize_first_token */
+typedef enum TokenResult {
+    TOKEN_END,          /**< end of input, no token extracted */
+    TOKEN_OK,           /**< a token was extracted into the buffer */
+    TOKEN_UNTERMINATED  /**< a [...] string literal was not closed */
+} TokenResult;
 
 /**
  * Extract the first token from str into the token buffer
  * @param token An allocated string to store the token (a string literal is
  * stored without its outer brackets)
  * @param str String to search the element on (operator, operand or command)
+ * @param next Set to str advanced past the extracted token (may be NULL)
  * @param is_string Set to true when the token is a [...] string literal
- * @return Pointer to str after the extracted token, or NULL at end of input
- * or on an unterminated string literal
+ * @return TOKEN_OK when a token was extracted, TOKEN_END at end of input,
+ * or TOKEN_UNTERMINATED on an unterminated string literal (reported by the
+ * caller)
  */
-char *tokenize_first_token(char *token, char *str, bool *is_string);
+TokenResult tokenize_first_token(char *token, char *str, char **next, bool *is_string);
 
 /**
  * Fetch the register name following a register command letter or a
@@ -55,7 +55,8 @@ char *tokenize_first_token(char *token, char *str, bool *is_string);
  * comment or a string literal is never a name: a '#' char means the rest of
  * the line is a comment, so the command is left without a name.
  * @param ptr Input position, advanced past the name character
- * @return The register name, or -1 when there is none (error reported)
+ * @return The register name, or -1 when there is none (the caller reports
+ * the error)
  */
 int tokenize_register_name(char **ptr);
 

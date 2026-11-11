@@ -72,6 +72,15 @@ char *read_line(void) {
 }
 
 /**
+ * Open a script file for reading
+ * @param path File path
+ * @return The stream, or NULL on failure (errno set)
+ */
+FILE *script_open(const char *path) {
+    return fopen(path, "r");
+}
+
+/**
  * Whether the standard input is a terminal (which already echoes what the
  * user types, so no explicit echo is needed)
  * @return true when stdin is a tty
@@ -80,7 +89,7 @@ bool stdin_is_tty(void) {
     return isatty(fileno(stdin));
 }
 
-void printUsage(const char *progName) {
+void print_usage(const char *progName) {
     printf("Usage: %s [OPTION] [file...]\n", progName);
     puts("  -e, --expression=EXPR    evaluate expression");
     puts("  -f, --file=FILE          evaluate contents of file");
@@ -89,7 +98,7 @@ void printUsage(const char *progName) {
     puts("  file...                  read and execute script files, in order");
 }
 
-void printVersion(const char *version, const char *copyright) {
+void print_version(const char *version, const char *copyright) {
     printf("rpn %s\n", version);
     puts("");
     puts(copyright);

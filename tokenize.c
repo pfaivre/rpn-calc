@@ -24,17 +24,16 @@ SOFTWARE.
 
 /* The tokenizer is the pure lexing layer of the parser: it turns an input
  * line into tokens without touching the stack, registers or any calculator
- * state. Errors are reported through the public calc_report_errorf. */
+ * state. Errors are returned as status codes; the caller reports them. */
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
 
-#include "calc.h"
 #include "number.h"
 #include "tokenize.h"
 
-bool tokenize_continues(const char *token, size_t len, char c) {
+static bool tokenize_continues(const char *token, size_t len, char c) {
     // A digit char (0-9 or hex letter A-F) continues a number (possibly
     // negative: _ prefix, or after a .)
     if (number_digit_value(c) >= 0)
@@ -60,27 +59,24 @@ bool tokenize_continues(const char *token, size_t len, char c) {
     return false;
 }
 
-char *tokenize_first_token(char *token, char *str, bool *is_string) {
+TokenResult tokenize_first_token(char *token, char *str, char **next, bool *is_string) {
     size_t i = 0;
 
     *is_string = false;
+    if (next)
+        *next = str;
 
-    if (!token)
-        return NULL;
-
-    // End of input: clear the token so the caller's loop stops
-    if (!str) {
-        token[0] = '\0';
-        return NULL;
-    }
+    if (!token || !str)
+        return TOKEN_END;
 
     // Ignore leading spaces, tabs and new lines
     while (*str == ' ' || *str == '\t' || *str == '\n')
         str++;
 
+    // End of input: clear the token so the caller's loop stops
     if (*str == '\0') {
         token[0] = '\0';
-        return NULL;
+        return TOKEN_END;
     }
 
     // String literal: copy everything up to the matching ']', keeping inner
@@ -103,12 +99,13 @@ char *tokenize_first_token(char *token, char *str, bool *is_string) {
             token[i] = '\0';
         }
         if (depth != 0) {
-            calc_report_errorf("%s", "unterminated string");
             token[0] = '\0';
-            return NULL;
+            return TOKEN_UNTERMINATED;
         }
         *is_string = true;
-        return p;
+        if (next)
+            *next = p;
+        return TOKEN_OK;
     }
 
     token[i] = '\0';
@@ -122,17 +119,17 @@ char *tokenize_first_token(char *token, char *str, bool *is_string) {
         token[i] = '\0';
     }
 
-    return str;
+    if (next)
+        *next = str;
+    return TOKEN_OK;
 }
 
 int tokenize_register_name(char **ptr) {
     while (**ptr == ' ' || **ptr == '\t' || **ptr == '\n')
         (*ptr)++;
     char c = **ptr;
-    if (c == '\0' || c == '#' || c == '[') {
-        calc_report_errorf("%s", "expected a single-character register name");
-        return -1;
-    }
+    if (c == '\0' || c == '#' || c == '[')
+        return -1;  // no name: the caller reports the error
     (*ptr)++;
     return (unsigned char) c;
 }

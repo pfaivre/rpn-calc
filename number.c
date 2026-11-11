@@ -196,7 +196,9 @@ bool number_parse(const char *token, long base, Value *out) {
 /** Print x in the given base as uppercase digits, zero-padded on the left to
  * at least min_width digits (mpz_get_str yields a-z for bases > 10) */
 static void print_base_digits(const mpz_t x, int base, long min_width) {
-    size_t bufsize = mpz_sizeinbase(x, base) + 2;  // sign + NUL
+    size_t bufsize;
+    if (ckd_add(&bufsize, mpz_sizeinbase(x, base), (size_t) 2))  // sign + NUL
+        rpn_fatal("number too large");
     char *digits = malloc(bufsize);
     if (!digits)
         rpn_fatal("memory allocation error");
@@ -587,32 +589,30 @@ const char *number_pow(const Value *base, const Value *exp, long k, Value *out) 
         // Positive exponent n: result scale min(sa*n, max(sa, k)). Bases of value
         // 0 or +-1 are exact for any exponent and stay instant.
         long cap = sa > k ? sa : k;
+        long sa_n = 0;
+        // fits_slong, not fits_ulong: mpz_get_si must never wrap negative
+        // (exponents above LONG_MAX would yield a negative scale and
+        // abort GMP in pow10); short-circuit keeps the cast in range
+        bool big = !mpz_fits_slong_p(e) || ckd_mul(&sa_n, sa, mpz_get_si(e));
+        long rs = big ? cap : (sa_n < cap ? sa_n : cap);  // min(sa*n, cap)
         if (is_unit_base(base) || mpz_sgn(base->num) == 0) {
-            long sa_n = 0;
-            bool big = !mpz_fits_ulong_p(e) || ckd_mul(&sa_n, sa, (long) mpz_get_ui(e));
-            long rs = big ? cap : (sa_n < cap ? sa_n : cap);  // min(sa*n, cap)
             if (mpz_sgn(base->num) == 0)
                 mpz_set_ui(rn, 0);
             else
                 unit_at_scale(rn, base, e, rs);
             number_set(out, rn, rs);
+        } else if (big) {
+            err = "exponent too large in raise";
         } else {
-            long sa_n = 0;
-            bool big = !mpz_fits_ulong_p(e) || ckd_mul(&sa_n, sa, (long) mpz_get_ui(e));
-            long rs = big ? cap : (sa_n < cap ? sa_n : cap);  // min(sa*n, cap)
-            if (big)
-                err = "exponent too large in raise";
-            else {
-                unsigned long n;
-                err = pow_exp_guard(e, base->num, &n);
-                if (!err) {
-                    mpz_t full;
-                    mpz_init(full);
-                    mpz_pow_ui(full, base->num, n);
-                    trunc_div_pow10(rn, full, sa_n - rs);  // shift >= 0
-                    mpz_clear(full);
-                    number_set(out, rn, rs);
-                }
+            unsigned long n;
+            err = pow_exp_guard(e, base->num, &n);
+            if (!err) {
+                mpz_t full;
+                mpz_init(full);
+                mpz_pow_ui(full, base->num, n);
+                trunc_div_pow10(rn, full, sa_n - rs);  // shift >= 0
+                mpz_clear(full);
+                number_set(out, rn, rs);
             }
         }
     }

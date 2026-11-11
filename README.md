@@ -304,10 +304,10 @@ results on one machine (Intel(R) Core(TM) i5-10600KF CPU @ 4.10GHz), wall time i
 | `2 3000000 ^` | 61 | 8411 |
 | parse a 100k-digit literal | 7 | 16966 |
 | 10k hex digits in and out | 1 | 2464 |
-| `v` at k=500 | 1 | 7 |
+| R rotates a 900-deep stack 80k times | 35 | 211 |
 | sum 1..100000 via macro loop | 2 | 57 |
 | countdown 100000 via loop | 1 | 41 |
-| R rotates a 900-deep stack 80k times | 35 | 211 |
+| `v` at k=500 | 1 | 7 |
 | factorial 900 (recursive loop) | 2 | 5 |
 | `\|` modpow, 60-digit exponent | 1 | 1 |
 | division at k=500, big multiply | 1 | 1 |

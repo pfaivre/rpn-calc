@@ -57,12 +57,12 @@ typedef struct StructRegisters {
 
 typedef StructRegisters* Registers;
 
-Registers registers_init();
+[[nodiscard]] Registers registers_init();
 
 void registers_delete(Registers);
 
 /** The value stack of a register, created on first use */
-Stack register_stack(Registers, unsigned char name);
+[[nodiscard]] Stack register_stack(Registers, unsigned char name);
 
 /**
  * Store a value in the register's array at the given index, replacing the
@@ -75,6 +75,6 @@ void register_array_store(Registers, unsigned char name, const mpz_t index, Valu
  * Find the array cell at the given index (;)
  * @return The stored value, or NULL when the index was never stored
  */
-const Value *register_array_find(Registers, unsigned char name, const mpz_t index);
+[[nodiscard]] const Value *register_array_find(Registers, unsigned char name, const mpz_t index);
 
 #endif
