@@ -139,6 +139,39 @@ static bool _calc_top_three_numeric(Stack s) {
         && stack_third(s)->kind == VAL_NUM;
 }
 
+/**
+ * Check that the stack holds at least n values, reporting an underflow
+ * error once when it does not
+ * @param s Stack to check
+ * @param n Minimum number of values required
+ * @return true when the stack holds at least n values
+ */
+static bool _calc_need(Stack s, int n) {
+    if (!stack_hasAtLeast(s, n)) {
+        _calc_error("stack underflow");
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Check that the top n values of the stack are all numbers, reporting an
+ * underflow or non-numeric error otherwise
+ * @param s Stack to check
+ * @param n Number of top values required to be numbers (1, 2 or 3)
+ * @return true when the top n values are all numbers
+ */
+static bool _calc_need_numeric(Stack s, int n) {
+    if (!_calc_need(s, n))
+        return false;
+    bool numeric = n >= 3 ? _calc_top_three_numeric(s)
+                 : n == 2 ? _calc_top_two_numeric(s)
+                 : stack_top(s)->kind == VAL_NUM;
+    if (!numeric)
+        _calc_error("non-numeric value");
+    return numeric;
+}
+
 /** Pop n values off the stack (clearing each) and push out in their place
  * (out is cleared after the push). The single pop/clear/push tail shared by
  * the numeric command helpers, so the operands are released exactly once. */
@@ -164,14 +197,8 @@ typedef const char *(*NumberTernop)(const Value *, const Value *, const Value *,
  * @return The stack after the operation
  */
 static Stack _calc_num_binop(Stack s, NumberBinop op) {
-    if (!stack_hasAtLeast(s, 2)) {
-        _calc_error("stack underflow");
+    if (!_calc_need_numeric(s, 2))
         return s;
-    }
-    if (!_calc_top_two_numeric(s)) {
-        _calc_error("non-numeric value");
-        return s;
-    }
     Value out;
     const char *err = op(stack_second(s), stack_top(s), _calc_scale, &out);
     if (err) {
@@ -189,14 +216,8 @@ static Stack _calc_num_binop(Stack s, NumberBinop op) {
  * @return The stack after the operation
  */
 static Stack _calc_num_ternop(Stack s, NumberTernop op) {
-    if (!stack_hasAtLeast(s, 3)) {
-        _calc_error("stack underflow");
+    if (!_calc_need_numeric(s, 3))
         return s;
-    }
-    if (!_calc_top_three_numeric(s)) {
-        _calc_error("non-numeric value");
-        return s;
-    }
     Value out;
     const char *err = op(stack_third(s), stack_second(s), stack_top(s), &out);
     if (err) {
@@ -253,6 +274,24 @@ static bool _calc_index_mpz(const Value *v, mpz_t idx) {
 }
 
 /**
+ * Check that the top of the stack is usable as an array index (a nonnegative
+ * number, see _calc_index_mpz) and store its integer part in idx
+ * @param s Stack to inspect
+ * @param idx Output mpz, already initialized, set on success
+ * @return true on success; on error an error is reported and the stack is
+ * unchanged
+ */
+static bool _calc_need_index(Stack s, mpz_t idx) {
+    if (!_calc_need(s, 1))
+        return false;
+    if (!_calc_index_mpz(stack_top(s), idx)) {
+        _calc_error("array index must be a nonnegative integer");
+        return false;
+    }
+    return true;
+}
+
+/**
  * Pop the top value as a base (the i and o commands): its integer part must
  * be a number in 2..16. On error the value stays on the stack.
  * @param s Stack to modify
@@ -262,10 +301,8 @@ static bool _calc_index_mpz(const Value *v, mpz_t idx) {
  * @return The stack after the command
  */
 static Stack _calc_pop_base(Stack s, long *slot, const char *low_err, const char *high_err) {
-    if (!stack_hasAtLeast(s, 1)) {
-        _calc_error("stack underflow");
+    if (!_calc_need(s, 1))
         return s;
-    }
     mpz_t ip;
     mpz_init(ip);
     const char *err = NULL;
@@ -310,10 +347,8 @@ static Stack _calc_push_long(Stack s, long v) {
  * @return true on success, false on underflow (stack unchanged)
  */
 static bool _calc_pop_one(Stack *s, Value *out) {
-    if (!stack_hasAtLeast(*s, 1)) {
-        _calc_error("stack underflow");
+    if (!_calc_need(*s, 1))
         return false;
-    }
     *s = stack_pop(*s, out);
     return true;
 }
@@ -332,10 +367,8 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
         // s: pop the top of the main stack and make it the register's only
         // value (replacing any previous content)
         case 's': {
-            if (!stack_hasAtLeast(s, 1)) {
-                _calc_error("stack underflow");
+            if (!_calc_need(s, 1))
                 return s;
-            }
             Stack rs = register_stack(regs, name);
             rs = stack_clear(rs);
             stack_move_top(s, rs);
@@ -352,10 +385,8 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
         // S: pop the top of the main stack and push it onto the register's
         // own stack
         case 'S': {
-            if (!stack_hasAtLeast(s, 1)) {
-                _calc_error("stack underflow");
+            if (!_calc_need(s, 1))
                 return s;
-            }
             stack_move_top(s, register_stack(regs, name));
             return s;
         }
@@ -372,14 +403,11 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
         // : array store: the top of the main stack is the index, the second
         // is the value stored at that index (the value may be a string)
         case ':': {
-            if (!stack_hasAtLeast(s, 2)) {
-                _calc_error("stack underflow");
+            if (!_calc_need(s, 2))
                 return s;
-            }
             mpz_t idx;
             mpz_init(idx);
-            if (!_calc_index_mpz(stack_top(s), idx)) {
-                _calc_error("array index must be a nonnegative integer");
+            if (!_calc_need_index(s, idx)) {
                 mpz_clear(idx);
                 return s;
             }
@@ -394,14 +422,9 @@ static Stack _calc_register_cmd(Stack s, Registers regs, char cmd, unsigned char
         // ; array load: pop the index; push the stored value, or 0 when the
         // index was never stored
         case ';': {
-            if (!stack_hasAtLeast(s, 1)) {
-                _calc_error("stack underflow");
-                return s;
-            }
             mpz_t idx;
             mpz_init(idx);
-            if (!_calc_index_mpz(stack_top(s), idx)) {
-                _calc_error("array index must be a nonnegative integer");
+            if (!_calc_need_index(s, idx)) {
                 mpz_clear(idx);
                 return s;
             }
@@ -495,14 +518,8 @@ static Stack _calc_read_stdin(Stack s, Registers regs, int depth) {
  * @return The stack after performing the command
  */
 static Stack _calc_conditional(Stack s, Registers regs, const char *op, unsigned char name, int depth) {
-    if (!stack_hasAtLeast(s, 2)) {
-        _calc_error("stack underflow");
+    if (!_calc_need_numeric(s, 2))
         return s;
-    }
-    if (!_calc_top_two_numeric(s)) {
-        _calc_error("non-numeric value");
-        return s;
-    }
     // compare the original top-of-stack against the second value
     int cmp = number_cmp(stack_top(s), stack_second(s));
     Value a, b;
@@ -574,14 +591,8 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
     // Division with remainder (~): quotient at scale k pushed first, then
     // the remainder (scale max(sa, sb+k)) on top
     if (strcmp(command, "~") == 0) {
-        if (!stack_hasAtLeast(s, 2)) {
-            _calc_error("stack underflow");
+        if (!_calc_need_numeric(s, 2))
             return s;
-        }
-        if (!_calc_top_two_numeric(s)) {
-            _calc_error("non-numeric value");
-            return s;
-        }
         Value q, r;
         const char *err = number_divmod(stack_second(s), stack_top(s), _calc_scale, &q, &r);
         if (err) {
@@ -611,14 +622,8 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
 
     // Square root
     if (strcmp(command, "v") == 0) {
-        if (!stack_hasAtLeast(s, 1)) {
-            _calc_error("stack underflow");
+        if (!_calc_need_numeric(s, 1))
             return s;
-        }
-        if (stack_top(s)->kind != VAL_NUM) {
-            _calc_error("non-numeric value");
-            return s;
-        }
         Value out;
         const char *err = number_sqrt(stack_top(s), _calc_scale, &out);
         if (err) {
@@ -636,10 +641,8 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
     // k: pop the scale factor (the integer part of the top value); it must
     // be a nonnegative number not exceeding MAX_SCALE
     if (strcmp(command, "k") == 0) {
-        if (!stack_hasAtLeast(s, 1)) {
-            _calc_error("stack underflow");
+        if (!_calc_need(s, 1))
             return s;
-        }
         long ns;
         const char *err = number_scale_of(stack_top(s), &ns);
         if (err) {
@@ -710,10 +713,8 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
 
     // Print the top value (a string is printed as-is)
     if (strcmp(command, "p") == 0) {
-        if (!stack_hasAtLeast(s, 1)) {
-            _calc_error("stack underflow");
+        if (!_calc_need(s, 1))
             return s;
-        }
         _calc_print(stack_top(s), true);
         return s;
     }
@@ -752,10 +753,8 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
 
     // Duplicate the value at the top
     if (strcmp(command, "d") == 0) {
-        if (!stack_hasAtLeast(s, 1)) {
-            _calc_error("stack underflow");
+        if (!_calc_need(s, 1))
             return s;
-        }
         return stack_push_value(s, *stack_top(s));
     }
 
@@ -778,10 +777,8 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
     // n = 0 and a stack of one value are no-ops. A string count is an error
     // and stays on the stack.
     if (strcmp(command, "R") == 0) {
-        if (!stack_hasAtLeast(s, 1)) {
-            _calc_error("stack underflow");
+        if (!_calc_need(s, 1))
             return s;
-        }
         mpz_t n;
         mpz_init(n);
         if (!_calc_int_part_into(stack_top(s), n)) {
@@ -809,10 +806,8 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
     // contents are run as commands on the same stack, so macros can nest.
     // A number is left untouched.
     if (strcmp(command, "x") == 0) {
-        if (!stack_hasAtLeast(s, 1)) {
-            _calc_error("stack underflow");
+        if (!_calc_need(s, 1))
             return s;
-        }
         return _calc_exec_top(s, regs, depth);
     }
 
@@ -836,10 +831,8 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
     // the available levels, min(N, depth). The count is the integer part of
     // the top value, which must be >= 0.
     if (strcmp(command, "Q") == 0) {
-        if (!stack_hasAtLeast(s, 1)) {
-            _calc_error("stack underflow");
+        if (!_calc_need(s, 1))
             return s;
-        }
         mpz_t ip;
         mpz_init(ip);
         if (!_calc_int_part_into(stack_top(s), ip) || mpz_sgn(ip) < 0 || !mpz_fits_slong_p(ip)) {
