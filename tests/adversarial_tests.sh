@@ -63,14 +63,14 @@ expect_err "[[dx]x]dx" "macro nesting too deep"
 
 # Deep bracket nesting: tokenizing is iterative, executing is depth-capped,
 # so this must exit 1 with the depth error rather than overflow the stack.
-deep_open=$(yes '[' | head -n 20000 | tr -d '\n')
-deep_close=$(yes ']x' | head -n 20000 | tr -d '\n')
+deep_open=$(yes '[' 2>/dev/null | head -n 20000 | tr -d '\n')
+deep_close=$(yes ']x' 2>/dev/null | head -n 20000 | tr -d '\n')
 expect_err "${deep_open}1p${deep_close}" "macro nesting too deep"
 
 # ? chain: each ? reads another line and recurses one level deeper, so the
 # depth cap must fire before the C stack overflows (regression: SIGSEGV).
 tests_run=$((tests_run + 1))
-yes '?' | head -n 30000 | "$RPN_BIN" >/dev/null 2>"$errfile"
+yes '?' 2>/dev/null | head -n 30000 | "$RPN_BIN" >/dev/null 2>"$errfile"
 code=$?
 if [ "$code" -ge 128 ]; then
     failures=$((failures + 1))
@@ -181,9 +181,9 @@ fi
 # ===== SUMMARY =====
 
 if [ "$failures" -eq 0 ]; then
-    echo "All $tests_run adversarial tests passed"
+    echo -e "All $tests_run adversarial tests passed\n"
     exit 0
 else
-    echo "$failures of $tests_run adversarial tests failed"
+    echo -e "$failures of $tests_run adversarial tests failed\n"
     exit 1
 fi

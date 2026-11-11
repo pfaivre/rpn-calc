@@ -1273,9 +1273,9 @@ fi
 # ===== SUMMARY =====
 
 if [ "$failures" -eq 0 ]; then
-    echo "All $tests_run tests passed"
+    echo -e "All $tests_run tests passed\n"
     exit 0
 else
-    echo "$failures of $tests_run tests failed"
+    echo -e "$failures of $tests_run tests failed\n"
     exit 1
 fi
