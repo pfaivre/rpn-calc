@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#define VERSION "0.2.0"
+#define VERSION "0.2.1"
 #define COPYRIGHT "Copyright 2016 Pierre Faivre"
 
 #include <stdio.h>
@@ -32,6 +32,11 @@ SOFTWARE.
 #include <unistd.h>
 #include <getopt.h>
 
+#ifdef _WIN32
+#include <fcntl.h>  // _O_BINARY
+#include <io.h>     // _setmode, _fileno
+#endif
+
 #include "calc.h"
 #include "stack.h"
 #include "registers.h"
@@ -39,7 +44,7 @@ SOFTWARE.
 
 /**
  * Read and execute lines from a stream until EOF or a top-level q. A read
- * error (e.g. a directory passed as a script file, where getline fails) is
+ * error (e.g. a directory passed as a script file, where the read fails) is
  * reported but does not stop the session.
  * @param s Stack to modify
  * @param regs Register file to modify
@@ -106,6 +111,18 @@ static struct option long_options[] = {
 };
 
 int main(int argc, char **argv) {
+#ifdef _WIN32
+    // Piped output must stay byte-exact (text mode would translate LF to
+    // CRLF); consoles keep text mode so output renders correctly. Piped
+    // input goes binary so byte 0x1A is data, not EOF, as on POSIX; an
+    // interactive console keeps text mode so Ctrl-Z still means EOF.
+    if (!stdin_is_tty())
+        _setmode(_fileno(stdin), _O_BINARY);
+    if (!_isatty(_fileno(stdout)))
+        _setmode(_fileno(stdout), _O_BINARY);
+    if (!_isatty(_fileno(stderr)))
+        _setmode(_fileno(stderr), _O_BINARY);
+#endif
     Stack s = stack_init();
     Registers regs = registers_init();
     bool saw_opt_script = false;  // whether any -e or -f option was given

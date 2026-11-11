@@ -11,10 +11,14 @@ jobs:
     strategy:
       matrix:
         # Add more targets here to ship more binaries (e.g. linux-aarch64 on
-        # ubuntu-24.04-arm, or a Windows build on a windows runner)
+        # ubuntu-24.04-arm)
         target:
           - name: linux-x86_64
+            os: linux
             runs-on: ubuntu-24.04
+          - name: windows-x86_64
+            os: windows
+            runs-on: windows-latest
     runs-on: ${{ matrix.target.runs-on }}
 
     steps:
@@ -22,10 +26,22 @@ jobs:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
     # ubuntu-24.04 ships GCC 13, which has no -std=c23; C23 needs GCC 14+
-    - name: install dependencies
+    - name: install dependencies (linux)
+      if: matrix.target.os == 'linux'
       run: sudo apt-get install -y gcc-14 libgmp-dev
 
-    - name: build statically linked binary
+    # MSYS2 MinGW-w64: GCC supports -std=c23 and ships getopt.h and a static
+    # libgmp.a (MSVC is not supported as it lacks C23 <stdckdint.h>)
+    - name: set up MSYS2 MinGW-w64
+      if: matrix.target.os == 'windows'
+      uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
+      with:
+        msystem: MINGW64
+        update: true
+        install: mingw-w64-x86_64-gcc mingw-w64-x86_64-gmp make
+
+    - name: build statically linked binary (linux)
+      if: matrix.target.os == 'linux'
       run: |
         mkdir -p dist
         # -static: the binary runs on any Linux x86_64, no GMP install needed
@@ -35,10 +51,24 @@ jobs:
         dist/rpn-${{ matrix.target.name }} -V
         dist/rpn-${{ matrix.target.name }} -e "3 5 + 7 * p"
 
+    - name: build statically linked binary (windows)
+      if: matrix.target.os == 'windows'
+      shell: "msys2 {0}"
+      run: |
+        mkdir -p dist
+        # the makefile's OS=Windows_NT path builds a static rpn.exe (single
+        # source of truth for the compile flags); it runs on any Windows
+        # x86_64, no MinGW/GMP DLLs needed
+        make
+        cp rpn.exe dist/rpn-${{ matrix.target.name }}.exe
+        strip dist/rpn-${{ matrix.target.name }}.exe
+        ./dist/rpn-${{ matrix.target.name }}.exe -V
+        ./dist/rpn-${{ matrix.target.name }}.exe -e "3 5 + 7 * p"
+
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: rpn-${{ matrix.target.name }}
-        path: dist/rpn-${{ matrix.target.name }}
+        path: dist/rpn-${{ matrix.target.name }}*
 
   release:
     needs: build

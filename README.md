@@ -86,25 +86,18 @@ $ ./rpn
 ```
 
 ## Download
-Prebuilt statically linked binaries (Linux x86_64, no GMP installation needed)
-are available on the [releases page](https://github.com/pfaivre/rpn-calc/releases):
-download the `rpn-linux-x86_64` asset, `chmod +x` it and run it.
+Prebuilt statically linked binaries are available on the
+[releases page](https://github.com/pfaivre/rpn-calc/releases):
+`rpn-linux-x86_64` for Linux x86_64 (no GMP installation needed — `chmod +x` it
+and run it) and `rpn-windows-x86_64.exe` for Windows x86_64 (no MinGW or GMP
+DLLs needed).
 
 ## Examples
-`examples/demo.rpn` tours most commands — arithmetic, scale, bases, stack
-operations, strings, macros, registers, arrays, conditionals, loops, `q`/`Q`.
-`examples/fibonacci.rpn` is a small loop demo. `examples/game_of_life.rpn` runs
-Conway's Game of Life on a register array (a glider for 8 generations),
-`examples/miller_rabin.rpn` is a Miller-Rabin primality test built on `|`
-modular exponentiation, and `examples/mandelbrot.rpn` renders the Mandelbrot
-and a Julia set in ASCII using the scale factor `k` for fixed-point complex
-arithmetic — three examples of the Turing-complete macro language.
-All run identically under rpn and GNU dc, and are exercised by the dc
-compliance suite:
+[examples/](examples/) show what can be done with this calculator. You can try them with rpn or dc:
 
 ```sh
-$ ./rpn examples/demo.rpn
-$ dc examples/demo.rpn
+$ ./rpn examples/mandelbrot.rpn
+$ dc examples/mandelbrot.rpn
 ```
 
 ## Commands
@@ -213,90 +206,37 @@ The comparison is numeric only: a string operand is an error and the operands st
 ## Compatibility with dc
 For the commands listed above, rpn behaves like dc (checked against GNU dc 1.5.2):
 
-- The RPN stack model: values are pushed on a stack, operators pop their
-  operands, and the stack persists across input lines.
-- Number syntax: decimal numbers (`1.5`, `.5`, `1.`), `_` prefix for negative
-  numbers, leading zeros, tokens may be written without separating spaces
-  (`2 3*4+p`, and `2_3` is read as 2 then _3), and `#` starts a comment
-  running to the end of the line.
-- Operator semantics: `/`, `%` and `~` truncate toward zero (`~` pushes the
-  quotient first, then the remainder); `^` with a non-negative exponent,
-  including `0 0 ^` = 1, and a negative exponent giving the truncation of the
-  exact result at scale `k`; `v` rounds down; division by zero leaves the
-  operands on the stack and the session continues; `r` with fewer than two
-  values does nothing; `p` prints the top value without popping it and `f`
-  prints the whole stack, top first; `n` pops and prints without a trailing
-  newline and `P` pops and prints the integer part of the number as bytes,
-  most significant byte first.
-- Scale: a number is `num / 10^scale`; printing keeps the scale (`1.50`) but
-  drops a leading zero (`.5`), and zero prints as `0`. `k` sets the scale
-  factor (integer part of the popped value), `K` pushes it. Result scales:
-  `+`/`-` use `max(sa, sb)`, `*` uses `min(sa+sb, max(sa, sb, k))`, `/` uses
-  `k`, `%` and the `~` remainder use `max(sa, sb+k)`, `^` uses
-  `min(sa*n, max(sa, k))` (or `k` for a negative exponent), `v` uses
-  `max(sa, k)`. Comparisons ignore scale. `P`, `k`, `Q` and array indices use
-  the integer part of a number.
-- Arbitrary-precision decimal arithmetic: results are exact within the
-  scale rules, as in dc.
-- String literals `[...]` (with nested brackets), and printing them with `p`, `n`, `P` and `f`: `p` adds a trailing newline, `n` and `P` pop the value and print without one, `f` prints one value per line, top first. Arithmetic on a string reports `non-numeric value` and leaves the operands on the stack, as in dc.
-- Macro execution with `x`: a string is popped and run as commands on the same stack, macros nest, and `x` on a number leaves the stack untouched.
-- `R` rotation of the top `min(|n|, size)` stack values by one position (positive `n`: segment bottom to top; negative `n`: the other way; a count of magnitude >= the stack size rotates the whole stack once; the count is truncated to its integer part).
-- Registers: `s`/`l`/`S`/`L` on a per-register value stack (with `s` replacing the content, `l` peeking, `L` erroring on an empty register stack, and `l` on an empty register loading 0), and `:`/`;` arrays per register (index on top, missing index loads 0, negative or non-numeric index rejected with the operands kept, values may be strings, a register's stack and array are independent).
-- Conditionals `>r`, `<r`, `=r`, `!>r`, `!<r`, `!=r`: two values popped and compared as numbers (top against second), the register executed as a macro when the condition holds, without being consumed; a string operand reports `non-numeric value` with the operands kept.
-- `q` (quit two levels, exiting the program at the top level or in a directly-called macro) and `Q` (pop a count, quit that many levels, never exit; over-depth counts still quit the available levels and invalid counts are errors, as in dc).
-- Input/output bases `i`/`I`/`o`/`O` in 2..16: digits `0`-`9` and `A`-`F` are read in the input base (letters keep their face value even beyond the base), numbers are stored base 10 internally, and printing converts to the output base — integer part in that base, fraction with `ceil(log_base(10^scale))` digits, uppercase digits, no leading zero before the point, zero as `0`. `P` prints bytes of the integer part in any base.
-- Stack introspection: `z` pushes the stack depth, `Z` pops and pushes the decimal digit count of a number (or character count of a string), `X` pops and pushes the scale of the value.
-- `|` modular exponentiation: `b^e mod m` with arbitrarily large exponents; the base and exponent are truncated to integers, the modulus keeps its scale, and the result scale is `max(scale(base), scale(modulus))`.
-- The `-e` and `-f` options, executed in command-line order (each `-e` one macro level above the top level, as in dc), positional files after all options, `-` as standard input, and standard input read at the end only when a positional file was given or no `-e`/`-f`/file argument was given at all.
+- Stack model, number syntax, and `#` comments.
+- Arithmetic `+ - * / % ~ ^ v |` with dc's truncation, scale, and
+  division-by-zero rules.
+- Printing `p n P f` and stack operations `d r R c z Z X`.
+- Strings `[...]`, macros `x`, registers and arrays `s l S L : ;`,
+  conditionals `>r <r =r !>r !<r !=r`, and `q`/`Q`.
+- Bases `i I o O` and the `-e`/`-f`/positional-file/standard-input
+  command-line ordering.
 
 rpn deliberately differs from dc in the following ways:
 
-- Error messages are prefixed `rpn:` instead of `dc:`, and a stack underflow
-  reads `stack underflow` where dc says `stack empty`.
-- The exit status is 1 if any command failed, where dc always exits 0. The
-  session still continues after an error in both programs.
-- The scale factor is capped at 1,000,000 (`scale too large`), where dc would
-  try to compute with any scale. An exponent with a fractional part is
-  truncated to its integer part, where dc 1.5.2 rejects fractional exponents
-  with `exponent too large in raise`.
-- The output base is capped at 16, where dc 1.5.2 accepts larger bases and
-  prints their digits as space-separated two-digit decimals. In bases of 10
-  or less, multi-character runs containing hex letters parse with the letters'
-  face values, where dc 1.5.2 clamps them to 9.
-- With a nonzero scale factor `k`, dc 1.5.2's `|` returns 0 (a bug — its manual
-  says `|` is like `Sm^Lm%`, which at k=2 gives 3.00); rpn computes the true
-  modular exponentiation. Non-integer `|` operands are truncated silently,
-  where dc prints a runtime warning. At scale 0 with exponent 0 and modulus
-  ±1 (`b 0 1 |`), dc 1.5.2 returns 1 while rpn returns the correct 0, matching
-  dc's own `Sm^Lm%` semantics (`0 0 ^ 1 % p` is 0 in dc).
-- The shell escape (`!`) is deliberately not implemented: in dc it runs the
-  rest of the line through the shell, which would let a script file or a
-  pasted expression execute arbitrary commands. rpn reports `!` as
-  unimplemented. This is a security boundary, not a missing feature (see
-  "Security" below).
-- The `a` command (number to its low byte as a string, string to its first
-  character) is deprecated in dc itself, so rpn deliberately does not
-  implement it either: rpn reports `a` as unimplemented, where dc 1.5.2
-  still computes it behind a deprecation warning.
-- An unknown command such as `w` is reported as unimplemented. A `[...]`
-  literal not closed on the same line is an error, where dc keeps reading the
-  following lines into the string.
-- The register name is the next character after any whitespace, so `s a`
-  names register `a`, where dc reads the very next character and would name
-  a register after the space.
-  A `#` comment is never a register name: `s # ...` reports `expected a
-  single-character register name`, where dc names a register after the space
-  and treats the rest of the line as a comment (and compact `s#` in dc names
-  register `#`). Array indices are arbitrary precision, where dc 1.5.2 punts
-  on indices beyond an unsigned long.
-
-- A positive exponent that does not fit in an unsigned long, or whose result
-  would exceed 32 MiB, is rejected with `exponent too large in raise`, while
-  a huge negative exponent is computed exactly (0, 1 or _1), where dc gives
-  up with the same error.
-- A rotation count too large for a C long makes dc punt ("value overflows
-  simple integer") and skip the rotation; rpn's arbitrary-precision count
-  rotates the whole stack once.
+- Error messages are prefixed `rpn:` (underflow reads `stack underflow`), and
+  the exit status is 1 if any command failed (dc always exits 0); the session
+  continues after an error in both.
+- Limits dc lacks: the scale factor is capped at 1,000,000, `^` results at
+  32 MiB (huge negative exponents are computed exactly instead), and array
+  indices and `R` counts are arbitrary precision.
+- Fractional `^` exponents are truncated to their integer part (dc 1.5.2
+  rejects them), and the output base is capped at 16 (dc accepts larger bases).
+  In bases <= 10, hex letters in multi-character runs keep their face value
+  where dc clamps them to 9.
+- dc 1.5.2 bugs rpn does not reproduce: `|` returns 0 at nonzero scale and
+  returns 1 for `b 0 1 |` at scale 0; rpn computes the true modular
+  exponentiation and returns 0, matching dc's own `Sm^Lm%` semantics.
+- The shell escape `!` and the deprecated `a` command are deliberately not
+  implemented (security boundary, see "Security" below); unknown commands
+  report as unimplemented. A `[...]` literal not closed on the same line is an
+  error, where dc keeps reading further lines.
+- The register name is the next character after any whitespace (`s a` names
+  register `a`); a `#` is never a register name. dc instead reads the very
+  next character.
 
 ## Performance
 `make bench` (or `bash tests/bench.sh`, needs dc installed) times rpn against
