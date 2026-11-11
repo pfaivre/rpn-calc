@@ -30,15 +30,15 @@ jobs:
       if: matrix.target.os == 'linux'
       run: sudo apt-get install -y gcc-14 libgmp-dev
 
-    # MSYS2 MinGW-w64: GCC supports -std=c23 and ships getopt.h and a static
+    # MSYS2 UCRT64: GCC supports -std=c23 and ships getopt.h and a static
     # libgmp.a (MSVC is not supported as it lacks C23 <stdckdint.h>)
-    - name: set up MSYS2 MinGW-w64
+    - name: set up MSYS2 UCRT64
       if: matrix.target.os == 'windows'
       uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
       with:
-        msystem: MINGW64
+        msystem: UCRT64
         update: true
-        install: mingw-w64-x86_64-gcc mingw-w64-x86_64-gmp make
+        install: mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-gmp make
 
     - name: build statically linked binary (linux)
       if: matrix.target.os == 'linux'

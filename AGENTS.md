@@ -8,7 +8,7 @@ The project uses a simple Makefile-based build system:
 
 - **Build command**: `make`
 - **Clean command**: `make clean`
-- **Windows build**: `make` under MSYS2/MinGW-w64 (MINGW64 shell) produces a
+- **Windows build**: `make` under MSYS2/MinGW-w64 (UCRT64 shell) produces a
   static `rpn.exe`; `make windows` cross-compiles it from Linux with
   `x86_64-w64-mingw32-gcc` (needs `mingw64-gcc` + `mingw64-gmp`). MSVC is not
   supported (no C23 `<stdckdint.h>`). CI builds and tests on a `windows-latest`

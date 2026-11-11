@@ -85,6 +85,20 @@ $ make
 $ ./rpn
 ```
 
+On Windows, build with MSYS2 in the UCRT64 shell (MSVC is not supported: it
+has no C23 `<stdckdint.h>`):
+
+```sh
+$ pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-gmp
+$ make        # produces a statically linked rpn.exe
+$ ./rpn.exe
+```
+
+From Linux, `make windows` cross-compiles the same binary with
+`x86_64-w64-mingw32-gcc` (needs `mingw64-gcc` and `mingw64-gmp`, e.g.
+`dnf install mingw64-gcc mingw64-gmp`; it links statically when the MinGW
+sysroot provides a static `libgmp.a`).
+
 ## Download
 Prebuilt statically linked binaries are available on the
 [releases page](https://github.com/pfaivre/rpn-calc/releases):
