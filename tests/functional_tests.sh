@@ -1131,10 +1131,12 @@ tests_run=$((tests_run + 1))
 r=$(./rpn "$tmpd/q.rpn" </dev/null 2>/dev/null)
 [ "$r" = "1" ] || { failures=$((failures+1)); echo "FAIL q in file: got '$r'"; }
 
-# a directory passed as a file argument is a read error (exit 1), not silent EOF
+# a directory passed as a file argument is an error (exit 1), not silent EOF:
+# "could not read" on POSIX (fopen succeeds, the read fails), "could not open
+# file" on Windows (fopen itself fails with EACCES)
 tests_run=$((tests_run + 1))
 r=$(./rpn "$tmpd" </dev/null 2>"$tmpd/err"); code=$?
-if [ -n "$r" ] || [ "$code" != "1" ] || ! grep -q "could not read" "$tmpd/err"; then
+if [ -n "$r" ] || [ "$code" != "1" ] || ! grep -Eq "could not (read|open file)" "$tmpd/err"; then
     failures=$((failures+1)); echo "FAIL directory arg: out='$r' code=$code err='$(cat "$tmpd/err")'"
 fi
 
@@ -1187,10 +1189,11 @@ if [ "$r" != "5" ] || [ "$code" != "1" ] || ! grep -q "could not open file" "$tm
     failures=$((failures+1)); echo "FAIL missing -f file: out='$r' code=$code err='$(cat "$tmpd/err")'"
 fi
 
-# -f on a directory opens but fails to read: "could not read", exit 1
+# -f on a directory is an error, exit 1: "could not read" on POSIX, "could not
+# open file" on Windows (see the directory-arg test above)
 tests_run=$((tests_run + 1))
 r=$(./rpn -f "$tmpd" </dev/null 2>"$tmpd/err"); code=$?
-if [ -n "$r" ] || [ "$code" != "1" ] || ! grep -q "could not read" "$tmpd/err"; then
+if [ -n "$r" ] || [ "$code" != "1" ] || ! grep -Eq "could not (read|open file)" "$tmpd/err"; then
     failures=$((failures+1)); echo "FAIL -f directory: out='$r' code=$code err='$(cat "$tmpd/err")'"
 fi
 

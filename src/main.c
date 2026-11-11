@@ -32,6 +32,11 @@ SOFTWARE.
 #include <unistd.h>
 #include <getopt.h>
 
+#ifdef _WIN32
+#include <fcntl.h>  // _O_BINARY
+#include <io.h>     // _setmode, _fileno
+#endif
+
 #include "calc.h"
 #include "stack.h"
 #include "registers.h"
@@ -106,6 +111,12 @@ static struct option long_options[] = {
 };
 
 int main(int argc, char **argv) {
+#ifdef _WIN32
+    // Keep piped output byte-exact: text mode would translate LF to CRLF.
+    // Standard input stays in text mode so CRLF script files parse as on POSIX.
+    _setmode(_fileno(stdout), _O_BINARY);
+    _setmode(_fileno(stderr), _O_BINARY);
+#endif
     Stack s = stack_init();
     Registers regs = registers_init();
     bool saw_opt_script = false;  // whether any -e or -f option was given
