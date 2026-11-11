@@ -188,6 +188,7 @@ static Stack _calc_replace_top(Stack s, int n, Value out) {
 
 typedef const char *(*NumberBinop)(const Value *, const Value *, long, Value *);
 typedef const char *(*NumberTernop)(const Value *, const Value *, const Value *, Value *);
+typedef const char *(*NumberUnop)(const Value *, long, Value *);
 
 /**
  * Apply a scale-aware binary operation to the top two values of the stack;
@@ -225,6 +226,25 @@ static Stack _calc_num_ternop(Stack s, NumberTernop op) {
         return s;
     }
     return _calc_replace_top(s, 3, out);
+}
+
+/**
+ * Apply a scale-aware unary operation to the top value of the stack; on
+ * error the operand stays on the stack
+ * @param s Stack to modify
+ * @param op The operation (e.g. number_sqrt)
+ * @return The stack after the operation
+ */
+static Stack _calc_num_unop(Stack s, NumberUnop op) {
+    if (!_calc_need_numeric(s, 1))
+        return s;
+    Value out;
+    const char *err = op(stack_top(s), _calc_scale, &out);
+    if (err) {
+        _calc_error(err);
+        return s;
+    }
+    return _calc_replace_top(s, 1, out);
 }
 
 /**
@@ -552,6 +572,287 @@ static Stack _calc_conditional(Stack s, Registers regs, const char *op, unsigned
     return _calc_exec_top(s, regs, depth);
 }
 
+/** A command handler: runs one command token on the stack */
+typedef Stack (*CommandFn)(Stack s, Registers regs, int depth);
+
+/** How a command table entry runs its command */
+typedef enum CommandKind {
+    CMD_BINOP,      /**< binary number operation (e.g. number_add) */
+    CMD_TERNOP,     /**< ternary number operation (number_powm) */
+    CMD_UNOP,       /**< unary number operation (number_sqrt) */
+    CMD_PUSH_LONG,  /**< push *slot (a calculator setting: K, I, O) */
+    CMD_FN          /**< plain command handler */
+} CommandKind;
+
+/** One entry of the command table */
+typedef struct Command {
+    const char *name;  /**< the token that triggers the command */
+    CommandKind kind;  /**< how run is interpreted */
+    union {
+        NumberBinop binop;
+        NumberTernop ternop;
+        NumberUnop unop;
+        const long *slot;
+        CommandFn fn;
+    } run;
+} Command;
+
+/** ~: division with remainder — quotient at scale k pushed first, then
+ * the remainder (scale max(sa, sb+k)) on top */
+static Stack _calc_cmd_divmod(Stack s, Registers regs, int depth) {
+    if (!_calc_need_numeric(s, 2))
+        return s;
+    Value q, r;
+    const char *err = number_divmod(stack_second(s), stack_top(s), _calc_scale, &q, &r);
+    if (err) {
+        _calc_error(err);
+        return s;
+    }
+    Value a, b;
+    s = stack_pop(s, &b);  // Pop divisor (top of stack)
+    s = stack_pop(s, &a);  // Pop dividend (next on stack)
+    value_clear(&a);
+    value_clear(&b);
+    s = stack_push_value(s, q);
+    s = stack_push_value(s, r);
+    value_clear(&q);
+    value_clear(&r);
+    return s;
+}
+
+/** k: pop the scale factor (the integer part of the top value); it must
+ * be a nonnegative number not exceeding MAX_SCALE */
+static Stack _calc_cmd_set_scale(Stack s, Registers regs, int depth) {
+    if (!_calc_need(s, 1))
+        return s;
+    long ns;
+    const char *err = number_scale_of(stack_top(s), &ns);
+    if (err) {
+        _calc_error(err);
+        return s;
+    }
+    _calc_scale = ns;
+    Value a;
+    s = stack_pop(s, &a);
+    value_clear(&a);
+    return s;
+}
+
+/** i: pop the input base (the integer part of the top value, 2..16) */
+static Stack _calc_cmd_in_base(Stack s, Registers regs, int depth) {
+    return _calc_pop_base(s, &_calc_in_base,
+                          "input base must be a number between 2 and 16 (inclusive)",
+                          "input base must be a number between 2 and 16 (inclusive)");
+}
+
+/** o: pop the output base (the integer part of the top value, 2..16) */
+static Stack _calc_cmd_out_base(Stack s, Registers regs, int depth) {
+    return _calc_pop_base(s, &_calc_out_base,
+                          "output base must be a number greater than 1",
+                          "output base must be a number between 2 and 16 (inclusive)");
+}
+
+/** z: push the depth of the stack (without popping) */
+static Stack _calc_cmd_stack_depth(Stack s, Registers regs, int depth) {
+    return _calc_push_long(s, (long) s->size);
+}
+
+/** Z: pop the top value and push its length: the number of decimal digits
+ * of a number (the sign and the point are not counted), or the number of
+ * characters of a string */
+static Stack _calc_cmd_length(Stack s, Registers regs, int depth) {
+    Value a;
+    if (!_calc_pop_one(&s, &a))
+        return s;
+    long len = number_length(&a);
+    value_clear(&a);
+    return _calc_push_long(s, len);
+}
+
+/** X: pop the top value and push its scale (the number of fractional
+ * digits; 0 for a string) */
+static Stack _calc_cmd_frac_scale(Stack s, Registers regs, int depth) {
+    Value a;
+    if (!_calc_pop_one(&s, &a))
+        return s;
+    long scale = a.kind == VAL_NUM ? a.scale : 0;
+    value_clear(&a);
+    return _calc_push_long(s, scale);
+}
+
+/** c: clear the stack */
+static Stack _calc_cmd_clear(Stack s, Registers regs, int depth) {
+    return stack_clear(s);
+}
+
+/** p: print the top value (a string is printed as-is) */
+static Stack _calc_cmd_print(Stack s, Registers regs, int depth) {
+    if (!_calc_need(s, 1))
+        return s;
+    _calc_print(stack_top(s), true);
+    return s;
+}
+
+/** n: pop the top value and print it without a trailing newline */
+static Stack _calc_cmd_print_nonl(Stack s, Registers regs, int depth) {
+    Value a;
+    if (!_calc_pop_one(&s, &a))
+        return s;
+    _calc_print(&a, false);
+    value_clear(&a);
+    return s;
+}
+
+/** P: pop the top value and print it without a trailing newline: a string
+ * is printed as-is, a number as a string of bytes, most significant byte of
+ * its absolute value first */
+static Stack _calc_cmd_print_bytes(Stack s, Registers regs, int depth) {
+    Value a;
+    if (!_calc_pop_one(&s, &a))
+        return s;
+    if (a.kind == VAL_STR)
+        fputs(a.str, stdout);
+    else
+        number_print_bytes(&a);
+    value_clear(&a);
+    return s;
+}
+
+/** f: print all the stack */
+static Stack _calc_cmd_print_all(Stack s, Registers regs, int depth) {
+    for (size_t i = s->size; i-- > 0; )
+        _calc_print(&s->vals[i], true);
+    return s;
+}
+
+/** d: duplicate the value at the top */
+static Stack _calc_cmd_dup(Stack s, Registers regs, int depth) {
+    if (!_calc_need(s, 1))
+        return s;
+    return stack_push_value(s, *stack_top(s));
+}
+
+/** r: swap the top two values of the stack (a no-op with fewer than two
+ * values, as in dc) */
+static Stack _calc_cmd_swap(Stack s, Registers regs, int depth) {
+    if (!stack_hasAtLeast(s, 2))
+        return s;
+    Value tmp = *stack_top(s);
+    *stack_top(s) = *stack_second(s);
+    *stack_second(s) = tmp;
+    return s;
+}
+
+/** R: pop a count n (its integer part) and rotate the top min(|n|, size)
+ * values by one position (positive n: the segment's bottom moves to the
+ * top; negative n: the top moves to the bottom). A string count is an
+ * error and stays on the stack. */
+static Stack _calc_cmd_rotate(Stack s, Registers regs, int depth) {
+    if (!_calc_need(s, 1))
+        return s;
+    mpz_t n;
+    mpz_init(n);
+    if (!_calc_int_part_into(stack_top(s), n)) {
+        _calc_error("non-numeric value");
+        mpz_clear(n);
+        return s;
+    }
+    Value count;
+    s = stack_pop(s, &count);
+    value_clear(&count);
+    bool neg = mpz_sgn(n) < 0;
+    mpz_abs(n, n);
+    size_t m = s->size;
+    if (mpz_fits_ulong_p(n)) {
+        unsigned long un = mpz_get_ui(n);
+        if (un < m)
+            m = un;
+    }
+    mpz_clear(n);
+    stack_rotate_top(s, m, neg);
+    return s;
+}
+
+/** x: execute the top value as a macro (a string is popped and its
+ * contents are run as commands on the same stack, so macros can nest;
+ * a number is left untouched) */
+static Stack _calc_cmd_exec(Stack s, Registers regs, int depth) {
+    if (!_calc_need(s, 1))
+        return s;
+    return _calc_exec_top(s, regs, depth);
+}
+
+/** q: quit two levels of macro execution (the current macro and its
+ * invoker); issued at the top level or in a macro called directly from
+ * the top level, it exits the program. A numeric top of stack
+ * is not popped. */
+static Stack _calc_cmd_quit(Stack s, Registers regs, int depth) {
+    _calc_quit = 2;
+    if (depth < 2)
+        _calc_exitAll = true;
+    return s;
+}
+
+/** Q: pop a count N and quit N levels of macro execution; it never exits
+ * the program. An over-depth count is an error (popped) but still quits
+ * the available levels, min(N, depth). The count is the integer part of
+ * the top value, which must be >= 0. */
+static Stack _calc_cmd_quit_n(Stack s, Registers regs, int depth) {
+    if (!_calc_need(s, 1))
+        return s;
+    mpz_t ip;
+    mpz_init(ip);
+    if (!_calc_int_part_into(stack_top(s), ip) || mpz_sgn(ip) < 0 || !mpz_fits_slong_p(ip)) {
+        _calc_error("Q command requires a number >= 0");
+        mpz_clear(ip);
+        return s;
+    }
+    Value n;
+    s = stack_pop(s, &n);
+    long count = mpz_get_si(ip);
+    mpz_clear(ip);
+    if (count > depth)
+        _calc_error("Q command argument exceeded string execution depth");
+    _calc_quit = (int) (count < depth ? count : depth);
+    value_clear(&n);
+    return s;
+}
+
+/** The command table: every command token that is not a number literal, a
+ * register command or a conditional, looked up by name in _calc_proceed */
+static const Command COMMANDS[] = {
+    { "+", CMD_BINOP,  { .binop = number_add } },
+    { "-", CMD_BINOP,  { .binop = number_sub } },
+    { "*", CMD_BINOP,  { .binop = number_mul } },
+    { "/", CMD_BINOP,  { .binop = number_div } },
+    { "%", CMD_BINOP,  { .binop = number_mod } },
+    { "^", CMD_BINOP,  { .binop = number_pow } },
+    { "|", CMD_TERNOP, { .ternop = number_powm } },
+    { "~", CMD_FN,     { .fn = _calc_cmd_divmod } },
+    { "v", CMD_UNOP,   { .unop = number_sqrt } },
+    { "k", CMD_FN,     { .fn = _calc_cmd_set_scale } },
+    { "K", CMD_PUSH_LONG, { .slot = &_calc_scale } },
+    { "i", CMD_FN,     { .fn = _calc_cmd_in_base } },
+    { "o", CMD_FN,     { .fn = _calc_cmd_out_base } },
+    { "I", CMD_PUSH_LONG, { .slot = &_calc_in_base } },
+    { "O", CMD_PUSH_LONG, { .slot = &_calc_out_base } },
+    { "z", CMD_FN,     { .fn = _calc_cmd_stack_depth } },
+    { "Z", CMD_FN,     { .fn = _calc_cmd_length } },
+    { "X", CMD_FN,     { .fn = _calc_cmd_frac_scale } },
+    { "c", CMD_FN,     { .fn = _calc_cmd_clear } },
+    { "p", CMD_FN,     { .fn = _calc_cmd_print } },
+    { "n", CMD_FN,     { .fn = _calc_cmd_print_nonl } },
+    { "P", CMD_FN,     { .fn = _calc_cmd_print_bytes } },
+    { "f", CMD_FN,     { .fn = _calc_cmd_print_all } },
+    { "d", CMD_FN,     { .fn = _calc_cmd_dup } },
+    { "r", CMD_FN,     { .fn = _calc_cmd_swap } },
+    { "R", CMD_FN,     { .fn = _calc_cmd_rotate } },
+    { "x", CMD_FN,     { .fn = _calc_cmd_exec } },
+    { "?", CMD_FN,     { .fn = _calc_read_stdin } },
+    { "q", CMD_FN,     { .fn = _calc_cmd_quit } },
+    { "Q", CMD_FN,     { .fn = _calc_cmd_quit_n } },
+};
+
 /**
  * Performs a single command
  * @param s Stack to modify
@@ -576,279 +877,16 @@ static Stack _calc_proceed(Stack s, Registers regs, const char* command, int dep
         return s;
     }
 
-    // Arithmetic operators
-    if (strcmp(command, "+") == 0)
-        return _calc_num_binop(s, number_add);
-    if (strcmp(command, "-") == 0)
-        return _calc_num_binop(s, number_sub);
-    if (strcmp(command, "*") == 0)
-        return _calc_num_binop(s, number_mul);
-    if (strcmp(command, "/") == 0)
-        return _calc_num_binop(s, number_div);
-    if (strcmp(command, "%") == 0)
-        return _calc_num_binop(s, number_mod);
-
-    // Division with remainder (~): quotient at scale k pushed first, then
-    // the remainder (scale max(sa, sb+k)) on top
-    if (strcmp(command, "~") == 0) {
-        if (!_calc_need_numeric(s, 2))
-            return s;
-        Value q, r;
-        const char *err = number_divmod(stack_second(s), stack_top(s), _calc_scale, &q, &r);
-        if (err) {
-            _calc_error(err);
-            return s;
+    for (size_t i = 0; i < sizeof COMMANDS / sizeof COMMANDS[0]; i++) {
+        if (strcmp(command, COMMANDS[i].name) == 0) {
+            switch (COMMANDS[i].kind) {
+                case CMD_BINOP:  return _calc_num_binop(s, COMMANDS[i].run.binop);
+                case CMD_TERNOP: return _calc_num_ternop(s, COMMANDS[i].run.ternop);
+                case CMD_UNOP:   return _calc_num_unop(s, COMMANDS[i].run.unop);
+                case CMD_PUSH_LONG: return _calc_push_long(s, *COMMANDS[i].run.slot);
+                case CMD_FN:     return COMMANDS[i].run.fn(s, regs, depth);
+            }
         }
-        Value a, b;
-        s = stack_pop(s, &b);  // Pop divisor (top of stack)
-        s = stack_pop(s, &a);  // Pop dividend (next on stack)
-        value_clear(&a);
-        value_clear(&b);
-        s = stack_push_value(s, q);
-        s = stack_push_value(s, r);
-        value_clear(&q);
-        value_clear(&r);
-        return s;
-    }
-
-    // Exponentiation
-    if (strcmp(command, "^") == 0)
-        return _calc_num_binop(s, number_pow);
-
-    // |: modular exponentiation b^e mod m — pops the modulus (top), the
-    // exponent and the base; on error the operands stay on the stack
-    if (strcmp(command, "|") == 0)
-        return _calc_num_ternop(s, number_powm);
-
-    // Square root
-    if (strcmp(command, "v") == 0) {
-        if (!_calc_need_numeric(s, 1))
-            return s;
-        Value out;
-        const char *err = number_sqrt(stack_top(s), _calc_scale, &out);
-        if (err) {
-            _calc_error(err);
-            return s;
-        }
-        Value a;
-        s = stack_pop(s, &a);
-        value_clear(&a);
-        s = stack_push_value(s, out);
-        value_clear(&out);
-        return s;
-    }
-
-    // k: pop the scale factor (the integer part of the top value); it must
-    // be a nonnegative number not exceeding MAX_SCALE
-    if (strcmp(command, "k") == 0) {
-        if (!_calc_need(s, 1))
-            return s;
-        long ns;
-        const char *err = number_scale_of(stack_top(s), &ns);
-        if (err) {
-            _calc_error(err);
-            return s;
-        }
-        _calc_scale = ns;
-        Value a;
-        s = stack_pop(s, &a);
-        value_clear(&a);
-        return s;
-    }
-
-    // K: push the current scale factor
-    if (strcmp(command, "K") == 0)
-        return _calc_push_long(s, _calc_scale);
-
-    // i: pop the input base (the integer part of the top value, 2..16)
-    if (strcmp(command, "i") == 0)
-        return _calc_pop_base(s, &_calc_in_base,
-                              "input base must be a number between 2 and 16 (inclusive)",
-                              "input base must be a number between 2 and 16 (inclusive)");
-
-    // o: pop the output base (the integer part of the top value, 2..16)
-    if (strcmp(command, "o") == 0)
-        return _calc_pop_base(s, &_calc_out_base,
-                              "output base must be a number greater than 1",
-                              "output base must be a number between 2 and 16 (inclusive)");
-
-    // I: push the current input base
-    if (strcmp(command, "I") == 0)
-        return _calc_push_long(s, _calc_in_base);
-
-    // O: push the current output base
-    if (strcmp(command, "O") == 0)
-        return _calc_push_long(s, _calc_out_base);
-
-    // z: push the depth of the stack (without popping)
-    if (strcmp(command, "z") == 0)
-        return _calc_push_long(s, (long) s->size);
-
-    // Z: pop the top value and push its length: the number of decimal digits
-    // of a number (the sign and the point are not counted), or the number of
-    // characters of a string
-    if (strcmp(command, "Z") == 0) {
-        Value a;
-        if (!_calc_pop_one(&s, &a))
-            return s;
-        long len = number_length(&a);
-        value_clear(&a);
-        return _calc_push_long(s, len);
-    }
-
-    // X: pop the top value and push its scale (the number of fractional
-    // digits; 0 for a string)
-    if (strcmp(command, "X") == 0) {
-        Value a;
-        if (!_calc_pop_one(&s, &a))
-            return s;
-        long scale = a.kind == VAL_NUM ? a.scale : 0;
-        value_clear(&a);
-        return _calc_push_long(s, scale);
-    }
-
-    // Clear the stack
-    if (strcmp(command, "c") == 0)
-        return stack_clear(s);
-
-    // Print the top value (a string is printed as-is)
-    if (strcmp(command, "p") == 0) {
-        if (!_calc_need(s, 1))
-            return s;
-        _calc_print(stack_top(s), true);
-        return s;
-    }
-
-    // Pop the top value and print it without a trailing newline
-    if (strcmp(command, "n") == 0) {
-        Value a;
-        if (!_calc_pop_one(&s, &a))
-            return s;
-        _calc_print(&a, false);
-        value_clear(&a);
-        return s;
-    }
-
-    // Pop the top value and print it without a trailing newline: a string
-    // is printed as-is, a number as a string of bytes, most significant
-    // byte of its absolute value first
-    if (strcmp(command, "P") == 0) {
-        Value a;
-        if (!_calc_pop_one(&s, &a))
-            return s;
-        if (a.kind == VAL_STR)
-            fputs(a.str, stdout);
-        else
-            number_print_bytes(&a);
-        value_clear(&a);
-        return s;
-    }
-
-    // Print all the stack
-    if (strcmp(command, "f") == 0) {
-        for (size_t i = s->size; i-- > 0; )
-            _calc_print(&s->vals[i], true);
-        return s;
-    }
-
-    // Duplicate the value at the top
-    if (strcmp(command, "d") == 0) {
-        if (!_calc_need(s, 1))
-            return s;
-        return stack_push_value(s, *stack_top(s));
-    }
-
-    // Swap the top two values of the stack (a no-op with fewer than two
-    // values, as in dc)
-    if (strcmp(command, "r") == 0) {
-        if (!stack_hasAtLeast(s, 2))
-            return s;
-        Value tmp = *stack_top(s);
-        *stack_top(s) = *stack_second(s);
-        *stack_second(s) = tmp;
-        return s;
-    }
-
-    // R: pop a count n (its integer part) and rotate the top min(|n|, size)
-    // values of the stack by one position: for a positive n the bottom of
-    // the rotated segment moves to the top (so the top value becomes the
-    // second from the top), for a negative n the top moves to the bottom.
-    // A count of magnitude >= the stack size rotates the whole stack once;
-    // n = 0 and a stack of one value are no-ops. A string count is an error
-    // and stays on the stack.
-    if (strcmp(command, "R") == 0) {
-        if (!_calc_need(s, 1))
-            return s;
-        mpz_t n;
-        mpz_init(n);
-        if (!_calc_int_part_into(stack_top(s), n)) {
-            _calc_error("non-numeric value");
-            mpz_clear(n);
-            return s;
-        }
-        Value count;
-        s = stack_pop(s, &count);
-        value_clear(&count);
-        bool neg = mpz_sgn(n) < 0;
-        mpz_abs(n, n);
-        size_t m = s->size;
-        if (mpz_fits_ulong_p(n)) {
-            unsigned long un = mpz_get_ui(n);
-            if (un < m)
-                m = un;
-        }
-        mpz_clear(n);
-        stack_rotate_top(s, m, neg);
-        return s;
-    }
-
-    // Execute the top value as a macro (x): a string is popped and its
-    // contents are run as commands on the same stack, so macros can nest.
-    // A number is left untouched.
-    if (strcmp(command, "x") == 0) {
-        if (!_calc_need(s, 1))
-            return s;
-        return _calc_exec_top(s, regs, depth);
-    }
-
-    // ?: read a line from stdin and execute it (see _calc_read_stdin)
-    if (strcmp(command, "?") == 0)
-        return _calc_read_stdin(s, regs, depth);
-
-    // q: quit two levels of macro execution (the current macro and its
-    // invoker); issued at the top level or in a macro called directly from
-    // the top level, it exits the program. A numeric top of stack
-    // is not popped.
-    if (strcmp(command, "q") == 0) {
-        _calc_quit = 2;
-        if (depth < 2)
-            _calc_exitAll = true;
-        return s;
-    }
-
-    // Q: pop a count N and quit N levels of macro execution; it never exits
-    // the program. An over-depth count is an error (popped) but still quits
-    // the available levels, min(N, depth). The count is the integer part of
-    // the top value, which must be >= 0.
-    if (strcmp(command, "Q") == 0) {
-        if (!_calc_need(s, 1))
-            return s;
-        mpz_t ip;
-        mpz_init(ip);
-        if (!_calc_int_part_into(stack_top(s), ip) || mpz_sgn(ip) < 0 || !mpz_fits_slong_p(ip)) {
-            _calc_error("Q command requires a number >= 0");
-            mpz_clear(ip);
-            return s;
-        }
-        Value n;
-        s = stack_pop(s, &n);
-        long count = mpz_get_si(ip);
-        mpz_clear(ip);
-        if (count > depth)
-            _calc_error("Q command argument exceeded string execution depth");
-        _calc_quit = (int) (count < depth ? count : depth);
-        value_clear(&n);
-        return s;
     }
 
     _calc_errorf("'%s' unimplemented", command);
