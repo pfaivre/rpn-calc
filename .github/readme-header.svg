@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="240" viewBox="0 0 1280 240">
+  <title>rpn-calc — arbitrary-precision RPN calculator</title>
+  <desc>Wide README header for github.com/pfaivre/rpn-calc: wordmark and tagline on the left, a floating skewed RPN expression (2 128 ^ = 2^128) glowing on the right over a dark terminal-style background with ghost tokens.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#10151d"/>
+      <stop offset="0.55" stop-color="#0d1117"/>
+      <stop offset="1" stop-color="#090c10"/>
+    </linearGradient>
+
+    <radialGradient id="glowGreen" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#3fb950" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#3fb950" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowBlue" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#58a6ff" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#58a6ff" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="vig" cx="0.5" cy="0.5" r="0.75">
+      <stop offset="0.55" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.55"/>
+    </radialGradient>
+
+    <pattern id="dots" width="36" height="36" patternUnits="userSpaceOnUse">
+      <circle cx="1.6" cy="1.6" r="1.6" fill="#e6edf3" fill-opacity="0.05"/>
+    </pattern>
+
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse">
+      <rect width="4" height="1.4" fill="#000000" fill-opacity="0.55"/>
+    </pattern>
+
+    <filter id="blurFar" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="3"/>
+    </filter>
+    <filter id="blurDeep" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="13"/>
+    </filter>
+    <filter id="blurNeon" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+
+    <g id="hero" font-family="'JetBrains Mono','Cascadia Mono',ui-monospace,Menlo,Consolas,'Liberation Mono','DejaVu Sans Mono',monospace">
+      <text x="0" y="0" font-size="38" font-weight="bold" xml:space="preserve"><tspan fill="#8b949e">$ </tspan><tspan fill="#7ee787">2 128 </tspan><tspan fill="#ffa657">^ p </tspan></text>
+      <rect x="280" y="-30" width="14" height="37" fill="#7ee787" opacity="0.9"/>
+      <text x="2" y="54" font-size="21" font-weight="bold" fill="#79c0ff" xml:space="preserve">340282366920938463463374607431768211456</text>
+    </g>
+  </defs>
+
+  <!-- background -->
+  <rect width="1280" height="240" fill="url(#bg)"/>
+  <rect width="1280" height="240" fill="url(#dots)"/>
+  <ellipse cx="350" cy="120" rx="500" ry="150" fill="url(#glowGreen)"/>
+  <ellipse cx="1060" cy="70" rx="380" ry="140" fill="url(#glowBlue)"/>
+
+  <!-- giant ghost wordmark, cropped at the right edge -->
+  <text x="1010" y="252" font-family="'JetBrains Mono','Cascadia Mono',ui-monospace,Menlo,Consolas,'Liberation Mono','DejaVu Sans Mono',monospace" font-size="180" font-weight="bold" fill="none" stroke="#e6edf3" stroke-opacity="0.05" stroke-width="1.4" letter-spacing="4">RPN</text>
+
+  <!-- scattered ghost tokens -->
+  <g font-family="'JetBrains Mono','Cascadia Mono',ui-monospace,Menlo,Consolas,'Liberation Mono','DejaVu Sans Mono',monospace" font-weight="bold">
+    <text x="250" y="52"  font-size="24" fill="#ffa657" opacity="0.10" transform="rotate(-8 250 52)">+</text>
+    <text x="430" y="200" font-size="30" fill="#7ee787" opacity="0.08" transform="rotate(6 430 200)">v</text>
+    <text x="150" y="190" font-size="20" fill="#d2a8ff" opacity="0.09">[la p]</text>
+    <text x="520" y="60"  font-size="34" fill="#58a6ff" opacity="0.07" filter="url(#blurFar)">^</text>
+    <text x="770" y="44"  font-size="20" fill="#8b949e" opacity="0.10">!&gt;X</text>
+    <text x="1185" y="60" font-size="26" fill="#ffa657" opacity="0.09" transform="rotate(8 1185 60)">|</text>
+    <text x="1235" y="165" font-size="38" fill="#7ee787" opacity="0.07" filter="url(#blurFar)">x</text>
+    <text x="620" y="222" font-size="22" fill="#6e7681" opacity="0.10">0 k</text>
+    <text x="900" y="228" font-size="26" fill="#d2a8ff" opacity="0.08" transform="rotate(-5 900 228)">sa</text>
+    <text x="340" y="100" font-size="20" fill="#f85149" opacity="0.08">_5</text>
+    <text x="1085" y="222" font-size="20" fill="#58a6ff" opacity="0.08" filter="url(#blurFar)">3.14</text>
+    <text x="60"  y="230" font-size="20" fill="#58a6ff" opacity="0.07">~</text>
+  </g>
+
+  <!-- foreground: floating skewed expression, right side -->
+  <g transform="translate(655,120) rotate(-5) skewX(-12)">
+    <use href="#hero" filter="url(#blurDeep)" opacity="0.55" transform="translate(18,24)"/>
+    <use href="#hero" filter="url(#blurNeon)" opacity="0.9"/>
+    <use href="#hero"/>
+  </g>
+
+  <!-- chrome: wordmark, tagline, repo url -->
+  <g font-family="'JetBrains Mono','Cascadia Mono',ui-monospace,Menlo,Consolas,'Liberation Mono','DejaVu Sans Mono',monospace">
+    <text x="56" y="92" font-size="40" font-weight="bold" xml:space="preserve"><tspan fill="#3fb950">&gt;_ </tspan><tspan fill="#e6edf3">rpn-calc</tspan><tspan fill="#6e7681" font-size="20" dx="12">v0.2.1</tspan></text>
+    <text x="56" y="136" font-size="19" fill="#8b949e">arbitrary-precision RPN calculator · a humble dc clone</text>
+    <text x="56" y="214" font-size="14" fill="#6e7681">github.com/pfaivre/rpn-calc</text>
+  </g>
+
+  <!-- finish -->
+  <rect width="1280" height="240" fill="url(#scan)" opacity="0.08"/>
+  <rect width="1280" height="240" fill="url(#vig)"/>
+</svg>

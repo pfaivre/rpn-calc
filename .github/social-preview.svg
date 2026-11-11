@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <title>rpn-calc — arbitrary-precision RPN calculator</title>
+  <desc>Social preview image for github.com/pfaivre/rpn-calc: a floating, skewed RPN expression (2 128 ^ = 2^128) glowing in the foreground over a dark terminal-style background scattered with ghost tokens and a faint stack hologram.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#10151d"/>
+      <stop offset="0.55" stop-color="#0d1117"/>
+      <stop offset="1" stop-color="#090c10"/>
+    </linearGradient>
+
+    <radialGradient id="glowGreen" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#3fb950" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#3fb950" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowBlue" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#58a6ff" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#58a6ff" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="vig" cx="0.5" cy="0.46" r="0.78">
+      <stop offset="0.55" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.55"/>
+    </radialGradient>
+
+    <pattern id="dots" width="36" height="36" patternUnits="userSpaceOnUse">
+      <circle cx="1.6" cy="1.6" r="1.6" fill="#e6edf3" fill-opacity="0.05"/>
+    </pattern>
+
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse">
+      <rect width="4" height="1.4" fill="#000000" fill-opacity="0.55"/>
+    </pattern>
+
+    <filter id="blurFar" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+    <filter id="blurDeep" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+    <filter id="blurNeon" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="8"/>
+    </filter>
+
+    <g id="hero" font-family="'JetBrains Mono','Cascadia Mono',ui-monospace,Menlo,Consolas,'Liberation Mono','DejaVu Sans Mono',monospace">
+      <text x="0" y="0" font-size="70" font-weight="bold" xml:space="preserve"><tspan fill="#8b949e">$ </tspan><tspan fill="#7ee787">2 128 </tspan><tspan fill="#ffa657">^ p </tspan></text>
+      <rect x="500" y="-54" width="25" height="64" fill="#7ee787" opacity="0.9"/>
+      <text x="2" y="102" font-size="40" font-weight="bold" fill="#79c0ff" xml:space="preserve">340282366920938463463374607431768211456</text>
+    </g>
+  </defs>
+
+  <!-- background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#dots)"/>
+  <ellipse cx="380" cy="270" rx="560" ry="360" fill="url(#glowGreen)"/>
+  <ellipse cx="1020" cy="120" rx="420" ry="280" fill="url(#glowBlue)"/>
+
+  <!-- giant ghost wordmark -->
+  <text x="30" y="600" font-family="'JetBrains Mono','Cascadia Mono',ui-monospace,Menlo,Consolas,'Liberation Mono','DejaVu Sans Mono',monospace" font-size="290" font-weight="bold" fill="none" stroke="#e6edf3" stroke-opacity="0.045" stroke-width="1.6" letter-spacing="6">RPN</text>
+
+  <!-- scattered ghost tokens -->
+  <g font-family="'JetBrains Mono','Cascadia Mono',ui-monospace,Menlo,Consolas,'Liberation Mono','DejaVu Sans Mono',monospace" font-weight="bold">
+    <text x="70"  y="120" font-size="36" fill="#ffa657" opacity="0.10" transform="rotate(-12 70 120)">^</text>
+    <text x="250" y="70"  font-size="26" fill="#58a6ff" opacity="0.09">+</text>
+    <text x="430" y="130" font-size="62" fill="#7ee787" opacity="0.07" transform="rotate(8 430 130)">v</text>
+    <text x="650" y="80"  font-size="30" fill="#d2a8ff" opacity="0.10">~</text>
+    <text x="870" y="110" font-size="46" fill="#ffa657" opacity="0.08" transform="rotate(-6 870 110)">|</text>
+    <text x="1085" y="90" font-size="30" fill="#7ee787" opacity="0.11" transform="rotate(10 1085 90)">%</text>
+    <text x="1120" y="230" font-size="56" fill="#58a6ff" opacity="0.06" filter="url(#blurFar)">x</text>
+    <text x="60"  y="310" font-size="24" fill="#d2a8ff" opacity="0.09">[la p]</text>
+    <text x="150" y="560" font-size="30" fill="#6e7681" opacity="0.11">sa</text>
+    <text x="965" y="585" font-size="38" fill="#ffa657" opacity="0.09" transform="rotate(6 965 585)">p</text>
+    <text x="1120" y="480" font-size="26" fill="#7ee787" opacity="0.09">q</text>
+    <text x="520" y="606" font-size="24" fill="#6e7681" opacity="0.10">0 k</text>
+    <text x="330" y="205" font-size="22" fill="#58a6ff" opacity="0.08" filter="url(#blurFar)">3.14</text>
+    <text x="720" y="596" font-size="40" fill="#7ee787" opacity="0.06" transform="rotate(-8 720 596)">1024</text>
+    <text x="1010" y="330" font-size="27" fill="#d2a8ff" opacity="0.08" transform="rotate(5 1010 330)">:a ;a</text>
+    <text x="170" y="430" font-size="60" fill="#6e7681" opacity="0.06" filter="url(#blurFar)">?</text>
+    <text x="905" y="190" font-size="24" fill="#8b949e" opacity="0.10">!&gt;X</text>
+    <text x="705" y="150" font-size="30" fill="#f85149" opacity="0.08">_5</text>
+    <text x="350" y="332" font-size="26" fill="#ffa657" opacity="0.08" transform="rotate(-4 350 332)">10 7 %</text>
+    <text x="620" y="348" font-size="24" fill="#7ee787" opacity="0.07" filter="url(#blurFar)">2 10 ^</text>
+    <text x="1060" y="620" font-size="22" fill="#58a6ff" opacity="0.07" filter="url(#blurFar)">d</text>
+  </g>
+
+  <!-- faint stack hologram, right side -->
+  <g transform="translate(872,368) rotate(-4)" font-family="'JetBrains Mono','Cascadia Mono',ui-monospace,Menlo,Consolas,'Liberation Mono','DejaVu Sans Mono',monospace" opacity="0.6">
+    <text x="-14" y="-14" font-size="16" fill="#6e7681" opacity="0.8"># the stack</text>
+    <g font-size="22" font-weight="bold">
+      <rect x="-14" y="0" width="264" height="46" rx="7" fill="#58a6ff" fill-opacity="0.05" stroke="#58a6ff" stroke-opacity="0.20"/>
+      <text x="0" y="31" fill="#6e7681">t<tspan fill="#58a6ff" dx="14">1024</tspan></text>
+      <rect x="-14" y="52" width="264" height="46" rx="7" fill="#58a6ff" fill-opacity="0.05" stroke="#58a6ff" stroke-opacity="0.20"/>
+      <text x="0" y="83" fill="#6e7681">z<tspan fill="#58a6ff" dx="14">_3</tspan></text>
+      <rect x="-14" y="104" width="264" height="46" rx="7" fill="#58a6ff" fill-opacity="0.05" stroke="#58a6ff" stroke-opacity="0.20"/>
+      <text x="0" y="135" fill="#6e7681">y<tspan fill="#58a6ff" dx="14">3.5</tspan></text>
+      <rect x="-14" y="156" width="264" height="46" rx="7" fill="#3fb950" fill-opacity="0.07" stroke="#3fb950" stroke-opacity="0.35"/>
+      <text x="0" y="187" fill="#6e7681">x<tspan fill="#7ee787" dx="14">376</tspan></text>
+    </g>
+  </g>
+
+  <!-- foreground: floating skewed expression -->
+  <g transform="translate(185,222) rotate(-6) skewX(-14)">
+    <use href="#hero" filter="url(#blurDeep)" opacity="0.55" transform="translate(30,44)"/>
+    <use href="#hero" filter="url(#blurNeon)" opacity="0.9"/>
+    <use href="#hero"/>
+  </g>
+
+  <!-- chrome: wordmark, tagline, repo url -->
+  <g font-family="'JetBrains Mono','Cascadia Mono',ui-monospace,Menlo,Consolas,'Liberation Mono','DejaVu Sans Mono',monospace">
+    <text x="56" y="78" font-size="32" font-weight="bold" xml:space="preserve"><tspan fill="#3fb950">&gt;_ </tspan><tspan fill="#e6edf3">rpn-calc</tspan><tspan fill="#6e7681" font-size="20" dx="14">v0.2.1</tspan></text>
+    <text x="56" y="582" font-size="19" fill="#8b949e">arbitrary-precision RPN calculator · a humble dc clone</text>
+    <text x="1144" y="582" font-size="16" fill="#6e7681" text-anchor="end">github.com/pfaivre/rpn-calc</text>
+  </g>
+
+  <!-- finish -->
+  <rect width="1200" height="630" fill="url(#scan)" opacity="0.08"/>
+  <rect width="1200" height="630" fill="url(#vig)"/>
+</svg>
