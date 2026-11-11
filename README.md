@@ -1,3 +1,7 @@
+<p align="center">
+  <img src=".github/readme-header.jpg" alt="rpn-calc — arbitrary-precision RPN calculator">
+</p>
+
 # rpn-calc [![Build and test](https://github.com/pfaivre/rpn-calc/actions/workflows/build-test.yml/badge.svg?branch=master)](https://github.com/pfaivre/rpn-calc/actions/workflows/build-test.yml)
 A humble dc clone, almost entirely compliant with it, with an emphasis on arithmetic correctness and execution safety.
 
