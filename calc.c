@@ -958,13 +958,12 @@ static Stack _calc_parse_depth(Stack s, Registers regs, char* string, int depth)
         // name as the next character
         const char *op = tokenize_conditional_op(token);
         if (op != NULL) {
-            char opbuf[3] = { op[0], op[1], '\0' };
             int name = tokenize_register_name(&ptr);
             if (name < 0) {
                 _calc_error("expected a single-character register name");
                 break;
             }
-            s = _calc_conditional(s, regs, opbuf, (unsigned char) name, depth);
+            s = _calc_conditional(s, regs, op, (unsigned char) name, depth);
             continue;
         }
 
