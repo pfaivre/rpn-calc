@@ -118,15 +118,18 @@ Write new code as if it will be audited against these rubrics:
 
 ## Project Structure
 
-- `main.c`: Entry point and command-line parsing
-- `calc.c/calc.h`: Calculator logic and RPN parsing/evaluation
-- `tokenize.c/tokenize.h`: Lexer — turns an input line into tokens (pure, no calculator state)
-- `value.h`: The tagged `Value` (decimal number or string) shared by stack, number and registers
-- `stack.c/stack.h`: Stack of tagged values (decimal number or string)
-- `number.c/number.h`: Decimal number arithmetic (value = num / 10^scale) and printing
-- `registers.c/registers.h`: Register file (per-register value stacks and arrays)
-- `io.c/io.h`: Input/output utilities
+- `src/`: C sources and headers (the `rpn` binary is still built at the repo root)
+  - `src/main.c`: Entry point and command-line parsing
+  - `src/calc.c`/`src/calc.h`: Calculator logic and RPN parsing/evaluation
+  - `src/tokenize.c`/`src/tokenize.h`: Lexer — turns an input line into tokens (pure, no calculator state)
+  - `src/value.h`: The tagged `Value` (decimal number or string) shared by stack, number and registers
+  - `src/stack.c`/`src/stack.h`: Stack of tagged values (decimal number or string)
+  - `src/number.c`/`src/number.h`: Decimal number arithmetic (value = num / 10^scale) and printing
+  - `src/registers.c`/`src/registers.h`: Register file (per-register value stacks and arrays)
+  - `src/io.c`/`src/io.h`: Input/output utilities
 - `examples/`: sample scripts (also run by the dc compliance suite)
+- `tests/`: functional, adversarial, dc-compliance and benchmark scripts (run `./rpn` from the repo root)
+- `.github/workflows/`: CI (build/test) and release workflows
 - `makefile`: Build configuration
 
 ## Special Notes

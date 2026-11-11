@@ -441,8 +441,8 @@ test_e "2" -e "1 1 + p"
 test_e "2" -e "1 1" -e "+ p"   # multiple -e run in command-line order
 test_e "2" -e "1 Q" -e "2 p"   # Q unwinds only its own -e frame (as in dc)
 test_e "2" --expression="1 1 + p"
-test_contains "rpn 0.1" -V
-test_contains "rpn 0.1" --version
+test_contains "rpn 0.2.0" -V
+test_contains "rpn 0.2.0" --version
 test_contains "Usage:" -h
 test_contains "Usage:" --help
 test_exit 0 -h
