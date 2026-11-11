@@ -1,5 +1,6 @@
 CC		= gcc
-OBJS	= main.o calc.o stack.o io.o registers.o number.o tokenize.o
+SRCDIR	= src
+OBJS	= $(addprefix $(SRCDIR)/, main.o calc.o stack.o io.o registers.o number.o tokenize.o)
 STD		= c23
 CFLAGS	= -c -g -Wall -pedantic -std=$(STD) -MMD -MP -D_FORTIFY_SOURCE=3 -O2
 LDFLAGS	= -lgmp
@@ -10,8 +11,8 @@ all:	$(PGM)
 $(PGM):	$(OBJS)
 		$(CC) -o $(PGM) $(OBJS) $(LDFLAGS)
 
-%.o:	%.c
-		$(CC) $(CFLAGS) $<
+$(SRCDIR)/%.o:	$(SRCDIR)/%.c
+		$(CC) $(CFLAGS) -o $@ $<
 
 -include $(OBJS:.o=.d)
 
@@ -22,7 +23,7 @@ clean:
 # For development
 
 check:
-		cppcheck -q --error-exitcode=1 *.c *.h
+		cppcheck -q --error-exitcode=1 $(SRCDIR)/*.c $(SRCDIR)/*.h
 
 valgrind: $(PGM)
 		valgrind ./$(PGM)
