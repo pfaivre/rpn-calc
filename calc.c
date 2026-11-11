@@ -888,9 +888,15 @@ static Stack _calc_parse_depth(Stack s, Registers regs, char* string, int depth)
             break;
         }
 
-        ptr = tokenize_first_token(token, ptr, &is_string);
-        if (ptr == NULL)
+        char *next;
+        TokenResult tr = tokenize_first_token(token, ptr, &next, &is_string);
+        if (tr == TOKEN_END)
             break;
+        if (tr == TOKEN_UNTERMINATED) {
+            _calc_error("unterminated string");
+            break;
+        }
+        ptr = next;
 
         // A [...] string literal is pushed as-is, even when empty or
         // starting with '#'
@@ -909,8 +915,10 @@ static Stack _calc_parse_depth(Stack s, Registers regs, char* string, int depth)
         if (strchr("slSL:;", token[0]) != NULL) {
             char cmd = token[0];
             int name = tokenize_register_name(&ptr);
-            if (name < 0)
+            if (name < 0) {
+                _calc_error("expected a single-character register name");
                 break;
+            }
             s = _calc_register_cmd(s, regs, cmd, (unsigned char) name);
             continue;
         }
@@ -921,8 +929,10 @@ static Stack _calc_parse_depth(Stack s, Registers regs, char* string, int depth)
         if (op != NULL) {
             char opbuf[3] = { op[0], op[1], '\0' };
             int name = tokenize_register_name(&ptr);
-            if (name < 0)
+            if (name < 0) {
+                _calc_error("expected a single-character register name");
                 break;
+            }
             s = _calc_conditional(s, regs, opbuf, (unsigned char) name, depth);
             continue;
         }
