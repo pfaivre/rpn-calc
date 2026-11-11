@@ -55,7 +55,8 @@ SOFTWARE.
  * parser only sees up to the first NUL.
  * Portable replacement for getline(), which Windows does not provide.
  * On Windows the stream is read in binary mode (see script_open/main), so a
- * trailing CR of a CRLF line ending is stripped here.
+ * trailing CR of a CRLF line ending is stripped here, and a console line
+ * holding only Ctrl+D (0x04) counts as EOF.
  * @param stream The stream to read from
  * @return A newly allocated string holding the line without its trailing
  *         newline, an empty string for an empty line, or NULL at EOF or on
@@ -88,6 +89,13 @@ char *read_line_stream(FILE *stream) {
 #ifdef _WIN32
     if (len > 0 && line[len - 1] == '\r')  // strip the CR of a CRLF ending
         len--;
+    // On a Windows console in text mode Ctrl+Z (0x1A) is already EOF, but
+    // Ctrl+D arrives as byte 0x04; treat a line that is only that byte as
+    // EOF, like Ctrl+D on a POSIX terminal (piped input keeps 0x04 as data)
+    if (stream == stdin && stdin_is_tty() && len == 1 && line[0] == '\x04') {
+        free(line);
+        return NULL;
+    }
 #endif
     line[len] = '\0';
     return line;
