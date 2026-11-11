@@ -85,6 +85,11 @@ $ make
 $ ./rpn
 ```
 
+## Download
+Prebuilt statically linked binaries (Linux x86_64, no GMP installation needed)
+are available on the [releases page](https://github.com/pfaivre/rpn-calc/releases):
+download the `rpn-linux-x86_64` asset, `chmod +x` it and run it.
+
 ## Examples
 `examples/demo.rpn` tours most commands — arithmetic, scale, bases, stack
 operations, strings, macros, registers, arrays, conditionals, loops, `q`/`Q`.
