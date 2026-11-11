@@ -29,25 +29,7 @@ SOFTWARE.
 
 #include <gmp.h>
 
-/** The kind of a stack value */
-typedef enum ValueKind {
-    VAL_NUM,  /**< arbitrary-precision integer */
-    VAL_STR   /**< string */
-} ValueKind;
-
-/**
- * A stack value: either an arbitrary-precision number or a string.
- * Only the member matching kind is valid.
- */
-typedef struct Value {
-    ValueKind kind;
-    union {
-        mpz_t num;   /**< digits of the number, when kind == VAL_NUM */
-        char *str;   /**< heap-allocated NUL-terminated string, when kind == VAL_STR */
-    };
-    long scale;      /**< fractional digits of a number (value = num / 10^scale);
-                          valid when kind == VAL_NUM */
-} Value;
+#include "value.h"
 
 /**
  * A stack of values backed by a dynamically growing array:

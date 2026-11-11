@@ -27,7 +27,7 @@ SOFTWARE.
 
 #include <gmp.h>
 
-#include "stack.h"
+#include "value.h"
 
 /**
  * Cap on the scale (number of fractional digits) of any value, set by k or
