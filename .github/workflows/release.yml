@@ -42,7 +42,7 @@ jobs:
       with:
         msystem: UCRT64
         update: true
-        install: mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-gmp mingw-w64-ucrt-x86_64-zip make
+        install: mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-gmp zip make
 
     - name: build statically linked bundle (linux)
       if: matrix.target.os == 'linux'
