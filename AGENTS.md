@@ -6,13 +6,17 @@ This document provides guidelines for agentic coding tools working in the rpn-ca
 
 The project uses a simple Makefile-based build system:
 
-- **Build command**: `make`
+- **Build command**: `make` (produces `rpn`, or `rpn.exe` on Windows)
 - **Clean command**: `make clean`
+- **Distribution bundle**: `make dist` stages the binary (`rpn` / `rpn.exe`)
+  and `examples/` into `dist/`; the release workflow archives it per target as
+  `rpn-<target>.tar.gz` (Linux) or `rpn-<target>.zip` (Windows), so the binary
+  keeps its plain name inside the bundle with the examples alongside it
 - **Windows build**: `make` under MSYS2/MinGW-w64 (UCRT64 shell) produces a
   static `rpn.exe`; `make windows` cross-compiles it from Linux with
   `x86_64-w64-mingw32-gcc` (needs `mingw64-gcc` + `mingw64-gmp`). MSVC is not
   supported (no C23 `<stdckdint.h>`). CI builds and tests on a `windows-latest`
-  runner, and releases ship `rpn-windows-x86_64.exe`. `make windows` links
+  runner. `make windows` links
   `-static` only when the MinGW sysroot has a static `libgmp.a` (MSYS2 does);
   with a DLL-only GMP (e.g. Fedora's `mingw64-gmp`) the resulting `rpn.exe`
   needs `libgmp-10.dll` next to it

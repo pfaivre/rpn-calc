@@ -1,13 +1,17 @@
-# ASCII Mandelbrot and Julia set renderer. Fixed-point arithmetic via the
-# scale factor k: numbers are num/10^k, so k=6 gives 6 decimal digits.
-# Each render is a 40x20 grid; a char ramp maps the iteration count to bytes.
-# Runs identically under rpn and dc. Notes: rpn string literals must close on
-# one line (each macro is one line), register names are written compactly
-# (dc reads the name as the very next character), value registers are
-# lowercase and macro registers uppercase (register names are case-sensitive).
-6 k
-40 sw 20 sh 24 sm
-# char ramp for iteration counts 0..10 (10 = never escaped = inside the set)
+# ASCII Mandelbrot and Julia set renderer, in fixed-point arithmetic via the
+# scale factor k: numbers are num/10^k. Each render is a WxH grid; a char ramp
+# maps the iteration count to bytes. Runs identically under rpn and dc.
+# Notes: rpn string literals must close on one line (each macro is one line),
+# register names are written compactly (dc reads the name as the very next
+# character), value registers are lowercase and macro registers uppercase
+# (register names are case-sensitive).
+
+# --- knobs: change these ---
+8 k          # scale: k decimal digits per number (k=6 -> 6 digits)
+32 sm        # M: max iterations per pixel
+
+# --- engine: no need to change below ---
+# char ramp for iteration bands 0..10 (10 = never escaped = inside the set)
 32 0 :R 46 1 :R 58 2 :R 45 3 :R 61 4 :R 43 5 :R 42 6 :R 35 7 :R 37 8 :R 64 9 :R 88 10 :R
 # iteration loop: z = z^2 + c while i < m and |z|^2 <= 4; c comes from macros
 # G/H (the pixel itself for Mandelbrot, a fixed constant for Julia)
@@ -19,26 +23,29 @@
 [lp su lq sv] sN
 [lK x 1 lx + sx lw lx !>X] sX
 [1 sx lX x 10 P 1 ly + sy lh ly !>Y] sY
-# ===== Mandelbrot: c = pixel, window [-2.2, 1.0] x [-1.2, 1.2], g = 0 =====
-_2.2 sa 1 sb _1.2 sc 1.2 sd
-lb la - lw / se
+
+# ===== Mandelbrot render: c = the pixel, window x in [a,b], y in [c,d] =====
+_2 sa 1 sb _1.2 sc 1.2 sd    # window: x0, x1, y0, y1
+70 sw 20 sh                    # W x H: grid size of render
+lb la - lw / se                # stepx and stepy, derived from the window
 ld lc - lh / sf
-[lp] sG
+[lp] sG    # c = pixel (Mandelbrot mode)
 [lq] sH
 0 sg
 1 sy lYx
 10 P
-# ===== Julia: z = pixel, c = -0.8 + 0.156i (registers n, o), g = 1 =====
-# Window cropped to the set's extent at the same zoom (stepx 0.075, stepy
-# 0.15): x in [-1.5, 1.5] over 50 cols, y in [-1.05, 1.05] over 18 rows, so
-# the fractal keeps its size and the blank top/bottom rows disappear.
-_1.5 sa 1.5 sb _1.05 sc 1.05 sd
-50 sw 18 sh
+
+# ===== Julia render: z = the pixel, c = n + o*i, a fixed constant =====
+# Window cropped to the set's extent at the same zoom as Mandelbrot (stepx
+# 0.075, stepy 0.15): x in [-1.5, 1.5] over 50 cols, y in [-1.05, 1.05] over
+# 18 rows, so the fractal keeps its size and the blank rows disappear.
+_1.5 sa 1.5 sb _1 sc 1.05 sd
+70 sw 18 sh                     # W x H: grid size of render
 lb la - lw / se
 ld lc - lh / sf
-_0.8 sn
+_0.8 sn                         # Julia constant c = n + o*i
 0.156 so
-[ln] sG
+[ln] sG    # c = the constant (Julia mode)
 [lo] sH
 1 sg
 1 sy lYx

@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#define VERSION "0.2.1"
+#define VERSION "0.2.2"
 #define COPYRIGHT "Copyright 2016 Pierre Faivre"
 
 #include <stdio.h>

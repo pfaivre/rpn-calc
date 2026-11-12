@@ -7,32 +7,6 @@ CFLAGS	= -c -g -Wall -pedantic -std=$(STD) -MMD -MP -D_FORTIFY_SOURCE=3 -O2
 LDFLAGS	= -lgmp
 PGM		= rpn
 
-# On Windows (MSYS2/MinGW-w64 make sets OS=Windows_NT): build a statically
-# linked rpn.exe, so it runs without the MinGW runtime or GMP DLLs
-ifeq ($(OS),Windows_NT)
-PGM		= rpn.exe
-LDFLAGS	+= -static
-endif
-
-all:	$(PGM)
-
-$(PGM):	$(OBJS)
-		$(CC) -o $(PGM) $(OBJS) $(LDFLAGS)
-
-$(OBJDIR)/%.o:	$(SRCDIR)/%.c | $(OBJDIR)
-		$(CC) $(CFLAGS) -o $@ $<
-
-$(OBJDIR):
-		mkdir -p $(OBJDIR)
-
--include $(OBJS:.o=.d)
-
-clean:
-		rm -f $(PGM) rpn rpn.exe
-		rm -f $(OBJS) $(OBJS:.o=.d)
-		rm -f $(WINOBJDIR)/*.o $(WINOBJDIR)/*.d
-		rmdir $(WINOBJDIR) 2>/dev/null || true
-
 # Cross-compile a Windows binary from Linux (needs mingw64-gcc and mingw64-gmp,
 # e.g. dnf install mingw64-gcc mingw64-gmp). Objects go to their own directory
 # so they never clash with a native build's. Links statically when the MinGW
@@ -47,8 +21,53 @@ else
 WINDOWS_LDFLAGS	= -lgmp -static
 endif
 
+# On Windows (MSYS2/MinGW-w64 make sets OS=Windows_NT): build a statically
+# linked rpn.exe, so it runs without the MinGW runtime or GMP DLLs
+ifeq ($(OS),Windows_NT)
+PGM		= rpn.exe
+LDFLAGS	+= -static
+endif
+
+.PHONY:	all clean windows dist check valgrind test bench
+
+# Build
+
+all:	$(PGM)
+
+$(PGM):	$(OBJS)
+		$(CC) -o $(PGM) $(OBJS) $(LDFLAGS)
+
+$(OBJDIR)/%.o:	$(SRCDIR)/%.c | $(OBJDIR)
+		$(CC) $(CFLAGS) -o $@ $<
+
+$(OBJDIR):
+		mkdir -p $(OBJDIR)
+
+-include $(OBJS:.o=.d)
+
+# Distribution
+
 windows:
 		$(MAKE) CC=$(MINGW) PGM=rpn.exe OBJDIR=$(WINOBJDIR) LDFLAGS="$(WINDOWS_LDFLAGS)" rpn.exe
+
+# Bundle the binary with the examples into dist/ for distribution. The
+# release workflow archives dist/ per target as rpn-<target>.tar.gz (Linux)
+# or rpn-<target>.zip (Windows); inside the archive the binary keeps its
+# plain name (rpn / rpn.exe) with examples/ alongside it
+dist:	$(PGM)
+		rm -rf dist
+		mkdir -p dist
+		cp $(PGM) dist/
+		cp -r examples dist/
+
+# Housekeeping
+
+clean:
+		rm -f $(PGM) rpn rpn.exe
+		rm -f $(OBJS) $(OBJS:.o=.d)
+		rm -f $(WINOBJDIR)/*.o $(WINOBJDIR)/*.d
+		rmdir $(WINOBJDIR) 2>/dev/null || true
+		rm -rf dist
 
 # For development
 

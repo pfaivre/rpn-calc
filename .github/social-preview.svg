@@ -106,7 +106,7 @@
 
   <!-- chrome: wordmark, tagline, repo url -->
   <g font-family="'JetBrains Mono','Cascadia Mono',ui-monospace,Menlo,Consolas,'Liberation Mono','DejaVu Sans Mono',monospace">
-    <text x="56" y="78" font-size="32" font-weight="bold" xml:space="preserve"><tspan fill="#3fb950">&gt;_ </tspan><tspan fill="#e6edf3">rpn-calc</tspan><tspan fill="#6e7681" font-size="20" dx="14">v0.2.1</tspan></text>
+    <text x="56" y="78" font-size="32" font-weight="bold" xml:space="preserve"><tspan fill="#3fb950">&gt;_ </tspan><tspan fill="#e6edf3">rpn-calc</tspan><tspan fill="#6e7681" font-size="20" dx="14">v0.2</tspan></text>
     <text x="56" y="582" font-size="19" fill="#8b949e">arbitrary-precision RPN calculator · a humble dc clone</text>
     <text x="1144" y="582" font-size="16" fill="#6e7681" text-anchor="end">github.com/pfaivre/rpn-calc</text>
   </g>

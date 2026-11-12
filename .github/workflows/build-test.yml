@@ -13,18 +13,19 @@ jobs:
     # pinned to the v4.2.2 commit, not the moving v4 tag
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-    # ubuntu-latest ships GCC 13, which has no -std=c23; C23 needs GCC 14+
+    # Pin the compiler by name (C23 needs GCC 14+): test with gcc-15 even when
+    # the ubuntu-latest image moves to a new release with a newer default gcc
     - name: install dependencies
-      run: sudo apt-get install -y gcc-14 libgmp-dev cppcheck
+      run: sudo apt-get install -y gcc-15 libgmp-dev cppcheck
 
     - name: make
-      run: make CC=gcc-14
+      run: make CC=gcc-15
 
     - name: make check
       run: make check
 
     - name: run tests
-      run: make CC=gcc-14 test
+      run: make CC=gcc-15 test
 
   sanitize:
 
@@ -34,10 +35,10 @@ jobs:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
     - name: install dependencies
-      run: sudo apt-get install -y gcc-14 libgmp-dev libasan8 libubsan1
+      run: sudo apt-get install -y gcc-15 libgmp-dev libasan8 libubsan1
 
     - name: build with address/UB sanitizers
-      run: gcc-14 -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -std=c23 -Wall -pedantic -o rpn src/*.c -lgmp
+      run: gcc-15 -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -std=c23 -Wall -pedantic -o rpn src/*.c -lgmp
 
     - name: run tests under sanitizers
       run: |

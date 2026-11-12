@@ -44,7 +44,7 @@
     <g id="hero" font-family="'JetBrains Mono','Cascadia Mono',ui-monospace,Menlo,Consolas,'Liberation Mono','DejaVu Sans Mono',monospace">
       <text x="0" y="0" font-size="38" font-weight="bold" xml:space="preserve"><tspan fill="#8b949e">$ </tspan><tspan fill="#7ee787">2 128 </tspan><tspan fill="#ffa657">^ p </tspan></text>
       <rect x="280" y="-30" width="14" height="37" fill="#7ee787" opacity="0.9"/>
-      <text x="2" y="54" font-size="21" font-weight="bold" fill="#79c0ff" xml:space="preserve">340282366920938463463374607431768211456</text>
+      <text x="7" y="54" font-size="21" font-weight="bold" fill="#79c0ff" xml:space="preserve">340282366920938463463374607431768211456</text>
     </g>
   </defs>
 
@@ -74,7 +74,7 @@
   </g>
 
   <!-- foreground: floating skewed expression, right side -->
-  <g transform="translate(655,120) rotate(-5) skewX(-12)">
+  <g transform="translate(744,104) rotate(-5) skewX(-12)">
     <use href="#hero" filter="url(#blurDeep)" opacity="0.55" transform="translate(18,24)"/>
     <use href="#hero" filter="url(#blurNeon)" opacity="0.9"/>
     <use href="#hero"/>
@@ -82,8 +82,8 @@
 
   <!-- chrome: wordmark, tagline, repo url -->
   <g font-family="'JetBrains Mono','Cascadia Mono',ui-monospace,Menlo,Consolas,'Liberation Mono','DejaVu Sans Mono',monospace">
-    <text x="56" y="92" font-size="40" font-weight="bold" xml:space="preserve"><tspan fill="#3fb950">&gt;_ </tspan><tspan fill="#e6edf3">rpn-calc</tspan><tspan fill="#6e7681" font-size="20" dx="12">v0.2.1</tspan></text>
-    <text x="56" y="136" font-size="19" fill="#8b949e">arbitrary-precision RPN calculator · a humble dc clone</text>
+    <text x="56" y="92" font-size="40" font-weight="bold" xml:space="preserve"><tspan fill="#3fb950">&gt;_ </tspan><tspan fill="#e6edf3">rpn-calc</tspan><tspan fill="#6e7681" font-size="20" dx="12">v0.2</tspan></text>
+    <text x="56" y="136" font-size="19" fill="#8b949e">arbitrary-precision RPN calculator</text>
     <text x="56" y="214" font-size="14" fill="#6e7681">github.com/pfaivre/rpn-calc</text>
   </g>
 

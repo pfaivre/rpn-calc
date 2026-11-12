@@ -1,6 +1,9 @@
 # Final executable
 rpn
 
+# Distribution bundle (make dist)
+dist/
+
 # Object files
 *.o
 *.ko

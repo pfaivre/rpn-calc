@@ -3,14 +3,13 @@
 # leaves 1 on the stack when n is probably prime, 0 when composite.
 # Runs identically under rpn and dc. Note: rpn string literals must close on
 # one line, so the macro is a single line.
-[sn ln 1 - sd 0 sr [ld 2 / sd 1 lr + sr ld 2 % 0 =m] sm lmx 1 sp 2 0 :q 3 1 :q 5 2 :q 7 3 :q 11 4 :q 13 5 :q 17 6 :q 19 7 :q 23 8 :q 29 9 :q 31 10 :q 37 11 :q 0 sj [lj ;q sa lj ;q ld ln | sx 0 sf lx 1 =T lx ln 1 - =U 1 sk lf 0 =v lf 0 =c 1 lj + sj lp 1 =z] su [lr lk <w] sv [lx 2 ln | sx lx ln 1 - =V 1 lk + sk lf 0 =v] sw [12 lj <u] sz [1 sf] sT [1 sf] sU [1 sf] sV [0 sp] sc lux lp] sM
-# test numbers: 2^61-1 (Mersenne prime), 561 (smallest Carmichael number),
-# 2^64+1 = 274177 * 67280421310721, 10^9+7 (prime), 10^9+8 (even),
-# 2^89-1 (Mersenne prime), 2047 (strong pseudoprime to base 2)
-2305843009213693951 lMx p
-561 lMx p
-18446744073709551617 lMx p
-1000000007 lMx p
-1000000008 lMx p
-618970019642690137449562111 lMx p
-2047 lMx p
+[sn ln 1 - sd 0 sr [ld 2 / sd 1 lr + sr ld 2 % 0 =m] sm lmx 1 sp 2 0 :q 3 1 :q 5 2 :q 7 3 :q 11 4 :q 13 5 :q 17 6 :q 19 7 :q 23 8 :q 29 9 :q 31 10 :q 37 11 :q 0 sj [lj ;q sa lj ;q ld ln | sx 0 sf lx 1 =T lx ln 1 - =U 1 sk lf 0 =v lf 0 =c 1 lj + sj lp 1 =z] su [lr lk <w] sv [lx 2 ln | sx lx ln 1 - =V 1 lk + sk lf 0 =v] sw [12 lj <u] sz [1 sf] sT [1 sf] sU [1 sf] sV [0 sp] sc lux lp] sM   # the test itself: no need to change
+
+# --- knobs: the numbers to test, one per line (prints 1 = probably prime, 0 = composite) ---
+2305843009213693951 lMx p    # 2^61-1, a Mersenne prime -> 1
+561 lMx p                    # smallest Carmichael number -> 0
+18446744073709551617 lMx p   # 2^64+1 = 274177 * 67280421310721 -> 0
+1000000007 lMx p             # 10^9+7, prime -> 1
+1000000008 lMx p             # 10^9+8, even -> 0
+618970019642690137449562111 lMx p   # 2^89-1, a Mersenne prime -> 1
+2047 lMx p                   # strong pseudoprime to base 2 -> 0
