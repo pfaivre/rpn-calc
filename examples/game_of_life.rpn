@@ -1,18 +1,35 @@
-# Conway's Game of Life on a 10x6 visible grid, padded to 12x8 so the edges
-# need no bounds checks. A glider runs for 8 generations, one grid per
-# block: '#' = alive, '.' = dead. Runs identically under rpn and dc.
+# Conway's Game of Life on a WxH visible grid, padded to (W+2)x(H+2) so the
+# edges need no bounds checks. One grid per generation: '#' = alive, '.' = dead.
+# Runs identically under rpn and dc.
 # Note: rpn string literals must close on one line, so each macro is a single
-# line, and macro registers (uppercase) are distinct from the counters
-# (lowercase) stored in other registers.
-12 sp 10 sw 6 sh
-1 27 :a 1 40 :a 1 50 :a 1 51 :a 1 52 :a
+# line, and macro registers (uppercase) are distinct from the value registers
+# (lowercase) holding the sizes and counters.
+
+# --- knobs: change these ---
+10 sw        # W: visible grid width
+6 sh         # H: visible grid height
+lw 2 + sp    # P: padded width, derived as W+2
+lp 1 - sd    # neighbor offsets, derived from P: d = P-1 ...
+lp 1 + sf    # ... f = P+1
+8 st         # T: number of generations to run
+
+# Initial pattern — one line per live cell, as (x, y) on the visible grid.
+# The default is a glider:
+1 2 lp * 3 + :a    # (3, 2)
+1 3 lp * 4 + :a    # (4, 3)
+1 4 lp * 2 + :a    # (2, 4)
+1 4 lp * 3 + :a    # (3, 4)
+1 4 lp * 4 + :a    # (4, 4)
+
+# --- engine: no need to change below ---
 [1 sv] sq
 [li ;a 1 =q] sr
-[ly lp * lx + si 0 sn li 13 - ;a ln + sn li 12 - ;a ln + sn li 11 - ;a ln + sn li 1 - ;a ln + sn li 1 + ;a ln + sn li 11 + ;a ln + sn li 12 + ;a ln + sn li 13 + ;a ln + sn 0 sv ln 3 =q ln 2 =r lv li :b] sK
+[ly lp * lx + si 0 sn li lf - ;a ln + sn li lp - ;a ln + sn li ld - ;a ln + sn li 1 - ;a ln + sn li 1 + ;a ln + sn li ld + ;a ln + sn li lp + ;a ln + sn li lf + ;a ln + sn 0 sv ln 3 =q ln 2 =r lv li :b] sK
 [lK x 1 lx + sx lw lx !>X] sX
 [ly lp * lx + ;a 11 * 46 r - P 1 lx + sx lw lx !>D] sD
 [1 sx lX x 1 ly + sy lh ly !>Y] sY
 [1 sx lD x 10 P 1 ly + sy lh ly !>Z] sZ
-[li ;b li :a 1 li + si 96 li <C] sC
+[li ;b li :a 1 li + si lp lh 2 + * li <C] sC
 [1 sy lYx 0 si lCx 1 sy lZx 10 P lt 1 - st 0 lt >E] sE
-8 st lEx
+lEx
+q

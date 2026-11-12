@@ -11,11 +11,11 @@ jobs:
     strategy:
       matrix:
         # Add more targets here to ship more binaries (e.g. linux-aarch64 on
-        # ubuntu-24.04-arm)
+        # ubuntu-26.04-arm)
         target:
           - name: linux-x86_64
             os: linux
-            runs-on: ubuntu-24.04
+            runs-on: ubuntu-26.04
           - name: windows-x86_64
             os: windows
             runs-on: windows-latest
@@ -25,10 +25,14 @@ jobs:
     # pinned to the v4.2.2 commit, not the moving v4 tag
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-    # ubuntu-24.04 ships GCC 13, which has no -std=c23; C23 needs GCC 14+
+    # Pin the compiler by name (C23 needs GCC 14+): build with gcc-15 rather
+    # than the image's default gcc, so release binaries stay on a fixed
+    # compiler across runner upgrades. The apt install is a no-op while the
+    # image already ships gcc-15, but fails loudly if a future image update
+    # drops the package or moves the default
     - name: install dependencies (linux)
       if: matrix.target.os == 'linux'
-      run: sudo apt-get install -y gcc-14 libgmp-dev
+      run: sudo apt-get install -y gcc-15 libgmp-dev
 
     # MSYS2 UCRT64: GCC supports -std=c23 and ships getopt.h and a static
     # libgmp.a (MSVC is not supported as it lacks C23 <stdckdint.h>)
@@ -38,32 +42,34 @@ jobs:
       with:
         msystem: UCRT64
         update: true
-        install: mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-gmp make
+        install: mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-gmp zip make
 
-    - name: build statically linked binary (linux)
+    - name: build statically linked bundle (linux)
       if: matrix.target.os == 'linux'
       run: |
-        mkdir -p dist
-        # -static: the binary runs on any Linux x86_64, no GMP install needed
-        gcc-14 -O2 -Wall -pedantic -std=c23 -D_FORTIFY_SOURCE=3 -static \
-          -o dist/rpn-${{ matrix.target.name }} src/*.c -lgmp
-        strip dist/rpn-${{ matrix.target.name }}
-        dist/rpn-${{ matrix.target.name }} -V
-        dist/rpn-${{ matrix.target.name }} -e "3 5 + 7 * p"
+        # -static: the binary runs on any Linux x86_64, no GMP install needed.
+        # make dist stages the binary (named rpn) and examples/ into dist/
+        make CC=gcc-15 LDFLAGS='-lgmp -static' dist
+        strip dist/rpn
+        dist/rpn -V
+        dist/rpn -e "3 5 + 7 * p"
+        # the archive holds rpn and examples/ at its root
+        tar -czf dist/rpn-${{ matrix.target.name }}.tar.gz -C dist rpn examples
 
-    - name: build statically linked binary (windows)
+    - name: build statically linked bundle (windows)
       if: matrix.target.os == 'windows'
       shell: "msys2 {0}"
       run: |
-        mkdir -p dist
         # the makefile's OS=Windows_NT path builds a static rpn.exe (single
         # source of truth for the compile flags); it runs on any Windows
-        # x86_64, no MinGW/GMP DLLs needed
-        make
-        cp rpn.exe dist/rpn-${{ matrix.target.name }}.exe
-        strip dist/rpn-${{ matrix.target.name }}.exe
-        ./dist/rpn-${{ matrix.target.name }}.exe -V
-        ./dist/rpn-${{ matrix.target.name }}.exe -e "3 5 + 7 * p"
+        # x86_64, no MinGW/GMP DLLs needed. make dist stages rpn.exe and
+        # examples/ into dist/
+        make dist
+        strip dist/rpn.exe
+        ./dist/rpn.exe -V
+        ./dist/rpn.exe -e "3 5 + 7 * p"
+        # the archive holds rpn.exe and examples/ at its root
+        (cd dist && zip -r rpn-${{ matrix.target.name }}.zip rpn.exe examples)
 
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
@@ -72,7 +78,7 @@ jobs:
 
   release:
     needs: build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
 

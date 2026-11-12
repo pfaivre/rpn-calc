@@ -77,41 +77,23 @@ first NUL byte is ignored.
 The exit status is 0 when every command succeeded, and 1 if any command failed
 (errors are reported on stderr) or an unknown option was given.
 
-## Installation
-Building requires GCC 14 or newer (C23 support: `-std=c23` and `<stdckdint.h>`).
-
-This program depends on GNU MP library version 6 or above. It is available with
-the package `libgmp-dev` on Debian and derivative, as `gmp-devel` on Fedora or
-as `gmp` on Arch Linux.
-
-```sh
-$ make
-$ ./rpn
-```
-
-On Windows, build with MSYS2 in the UCRT64 shell (MSVC is not supported: it
-has no C23 `<stdckdint.h>`):
-
-```sh
-$ pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-gmp
-$ make        # produces a statically linked rpn.exe
-$ ./rpn.exe
-```
-
-From Linux, `make windows` cross-compiles the same binary with
-`x86_64-w64-mingw32-gcc` (needs `mingw64-gcc` and `mingw64-gmp`, e.g.
-`dnf install mingw64-gcc mingw64-gmp`; it links statically when the MinGW
-sysroot provides a static `libgmp.a`).
-
 ## Download
 Prebuilt statically linked binaries are available on the
-[releases page](https://github.com/pfaivre/rpn-calc/releases):
-`rpn-linux-x86_64` for Linux x86_64 (no GMP installation needed — `chmod +x` it
-and run it) and `rpn-windows-x86_64.exe` for Windows x86_64 (no MinGW or GMP
-DLLs needed).
+[releases page](https://github.com/pfaivre/rpn-calc/releases). Each archive
+bundles the binary — named `rpn` on Linux, `rpn.exe` on Windows — together
+with the [examples](examples/): `rpn-linux-x86_64.tar.gz` for Linux x86_64 (no
+GMP installation needed) and `rpn-windows-x86_64.zip` for Windows x86_64 (no
+MinGW or GMP DLLs needed).
+
+```sh
+$ tar -xzf rpn-linux-x86_64.tar.gz   # on Windows: unzip rpn-windows-x86_64.zip
+$ ./rpn examples/mandelbrot.rpn
+```
 
 ## Examples
-[examples/](examples/) show what can be done with this calculator. You can try them with rpn or dc:
+[examples/](examples/) — also bundled alongside the binary in the release
+archives — show what can be done with this calculator. You can try them with
+rpn or dc:
 
 ```sh
 $ ./rpn examples/mandelbrot.rpn
@@ -303,6 +285,33 @@ crashing or executing anything:
   exponent allocation bombs, `|` modular-exponentiation stress, non-numeric
   operands on every numeric command, 100 KB tokens, the `P` byte-export path,
   a 100k-push realloc stress, and a fixed-seed fuzz smoke test.
+
+## Building from source
+Building from source requires GCC 14 or newer (C23 support: `-std=c23` and
+`<stdckdint.h>`).
+
+This program depends on GNU MP library version 6 or above. It is available with
+the package `libgmp-dev` on Debian and derivative, as `gmp-devel` on Fedora or
+as `gmp` on Arch Linux.
+
+```sh
+$ make
+$ ./rpn
+```
+
+On Windows, build with MSYS2 in the UCRT64 shell (MSVC is not supported: it
+has no C23 `<stdckdint.h>`):
+
+```sh
+$ pacman -S mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-gmp
+$ make        # produces a statically linked rpn.exe
+$ ./rpn.exe
+```
+
+From Linux, `make windows` cross-compiles the same binary with
+`x86_64-w64-mingw32-gcc` (needs `mingw64-gcc` and `mingw64-gmp`, e.g.
+`dnf install mingw64-gcc mingw64-gmp`; it links statically when the MinGW
+sysroot provides a static `libgmp.a`).
 
 ## License
 Copyright 2016-2026 Pierre Faivre. This is free software, and may be redistributed

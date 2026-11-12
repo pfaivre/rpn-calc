@@ -1,7 +1,9 @@
-# fibonacci.rpn — print the first 12 Fibonacci numbers.
+# fibonacci.rpn — print the first N Fibonacci numbers.
 # Run with:  ./rpn examples/fibonacci.rpn   (also runs under dc)
 # Uses registers (a, b, n, m), a conditional loop, and scale-free arithmetic.
-1 sa 1 sb 12 sn
-[la p la lb + lb sa sb ln 1 - sn 0 ln >m] sm
+
+12 sn       # N: how many numbers to print — change this value
+1 sa 1 sb   # a = current number, b = previous number
+[la p la lb + lb sa sb ln 1 - sn 0 ln >m] sm   # loop: print a, a<-b, b<-a+b, n--
 lmx
 q
