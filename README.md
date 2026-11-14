@@ -234,8 +234,11 @@ For the commands listed above, rpn behaves like dc (checked against GNU dc 1.5.2
   conditionals `>r <r =r !>r !<r !=r`, and `q`/`Q`.
 - Bases `i I o O` and the `-e`/`-f`/positional-file/standard-input
   command-line ordering.
-- The `DC_LINE_LENGTH` and `DC_PROMPT` environment variables (see `--help`),
-  including the default 70-column backslash wrapping of long printed numbers.
+- The `DC_LINE_LENGTH` and `DC_PROMPT` environment variables (see `--help`):
+  `DC_LINE_LENGTH` is parsed like dc (base-0 strtol with optional sign and
+  surrounding whitespace; 0 disables wrapping, 2..2147483647 sets the wrap
+  column, anything else keeps the default 70), and long printed numbers wrap
+  at that column with a backslash-newline.
 
 rpn deliberately differs from dc in the following ways:
 

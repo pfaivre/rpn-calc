@@ -33,6 +33,7 @@ SOFTWARE.
 #include "calc.h"
 #include "io.h"
 #include "number.h"
+#include "print.h"
 #include "stack.h"
 #include "tokenize.h"
 
@@ -118,6 +119,14 @@ void calc_report_errorf(const char *fmt, ...) {
  */
 bool calc_quit_requested() {
     return _calc_quit > 0 || _calc_exitAll;
+}
+
+/**
+ * The output base set by o (2..16), used when printing numbers
+ * @return The current output base
+ */
+long calc_out_base(void) {
+    return _calc_out_base;
 }
 
 /**
@@ -245,21 +254,6 @@ static Stack _calc_num_unop(Stack s, NumberUnop op) {
         return s;
     }
     return _calc_replace_top(s, 1, out);
-}
-
-/**
- * Print a value in the output base: a string as-is, a number with its scale
- * @param v Value to print
- * @param newline Whether to append a trailing newline
- */
-static void _calc_print(const Value *v, bool newline) {
-    if (v->kind == VAL_STR) {
-        emit_raw(v->str, strlen(v->str));  // strings are never wrapped
-        if (newline)
-            emit_char('\n');
-    } else {
-        number_print(v, newline, _calc_out_base);
-    }
 }
 
 static Stack _calc_parse_depth(Stack s, Registers regs, char *string, int depth);
@@ -510,7 +504,7 @@ static Stack _calc_exec_top(Stack s, Registers regs, int depth) {
  * @return The stack after the command
  */
 static Stack _calc_read_stdin(Stack s, Registers regs, int depth) {
-    char *line = read_stdin_line();  // prompts and echoes when interactive
+    char *line = read_stdin_line();  // prompts when interactive, echoes when piped
     if (!line) {
         // EOF: unwind all enclosing levels, then stop the top-level reader
         _calc_quit = depth + 1;
@@ -683,46 +677,6 @@ static Stack _calc_cmd_clear(Stack s, Registers regs, int depth) {
     return stack_clear(s);
 }
 
-/** p: print the top value (a string is printed as-is) */
-static Stack _calc_cmd_print(Stack s, Registers regs, int depth) {
-    if (!_calc_need(s, 1))
-        return s;
-    _calc_print(stack_top(s), true);
-    return s;
-}
-
-/** n: pop the top value and print it without a trailing newline */
-static Stack _calc_cmd_print_nonl(Stack s, Registers regs, int depth) {
-    Value a;
-    if (!_calc_pop_one(&s, &a))
-        return s;
-    _calc_print(&a, false);
-    value_clear(&a);
-    return s;
-}
-
-/** P: pop the top value and print it without a trailing newline: a string
- * is printed as-is, a number as a string of bytes, most significant byte of
- * its absolute value first */
-static Stack _calc_cmd_print_bytes(Stack s, Registers regs, int depth) {
-    Value a;
-    if (!_calc_pop_one(&s, &a))
-        return s;
-    if (a.kind == VAL_STR)
-        emit_raw(a.str, strlen(a.str));  // strings are never wrapped
-    else
-        number_print_bytes(&a);
-    value_clear(&a);
-    return s;
-}
-
-/** f: print all the stack */
-static Stack _calc_cmd_print_all(Stack s, Registers regs, int depth) {
-    for (size_t i = s->size; i-- > 0; )
-        _calc_print(&s->vals[i], true);
-    return s;
-}
-
 /** d: duplicate the value at the top */
 static Stack _calc_cmd_dup(Stack s, Registers regs, int depth) {
     if (!_calc_need(s, 1))
@@ -838,10 +792,10 @@ static const Command COMMANDS[] = {
     { "Z", CMD_FN,     { .fn = _calc_cmd_length } },
     { "X", CMD_FN,     { .fn = _calc_cmd_frac_scale } },
     { "c", CMD_FN,     { .fn = _calc_cmd_clear } },
-    { "p", CMD_FN,     { .fn = _calc_cmd_print } },
-    { "n", CMD_FN,     { .fn = _calc_cmd_print_nonl } },
-    { "P", CMD_FN,     { .fn = _calc_cmd_print_bytes } },
-    { "f", CMD_FN,     { .fn = _calc_cmd_print_all } },
+    { "p", CMD_FN,     { .fn = print_cmd_top } },
+    { "n", CMD_FN,     { .fn = print_cmd_nonl } },
+    { "P", CMD_FN,     { .fn = print_cmd_bytes } },
+    { "f", CMD_FN,     { .fn = print_cmd_all } },
     { "d", CMD_FN,     { .fn = _calc_cmd_dup } },
     { "r", CMD_FN,     { .fn = _calc_cmd_swap } },
     { "R", CMD_FN,     { .fn = _calc_cmd_rotate } },

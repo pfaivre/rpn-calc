@@ -56,8 +56,12 @@ SOFTWARE.
 static Stack run_lines(Stack s, Registers regs, FILE *stream, const char *name) {
     char *line;
     while (true) {
-        if (stream == stdin)
-            stdin_prompt();  // interactive input: show the DC_PROMPT, as in dc
+        if (stream == stdin) {
+            // Show the DC_PROMPT on a terminal, as in dc. Piped top-level
+            // input is not echoed here — only the ? command echoes (see
+            // read_stdin_line), also as in dc.
+            stdin_prompt();
+        }
         line = read_line_stream(stream);
         if (line == NULL)
             break;

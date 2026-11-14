@@ -133,6 +133,7 @@ Write new code as if it will be audited against these rubrics:
 - `src/`: C sources and headers (the `rpn` binary is still built at the repo root)
   - `src/main.c`: Entry point and command-line parsing
   - `src/calc.c`/`src/calc.h`: Calculator logic and RPN parsing/evaluation
+  - `src/print.c`/`src/print.h`: The print commands (`p`, `n`, `P`, `f`)
   - `src/tokenize.c`/`src/tokenize.h`: Lexer — turns an input line into tokens (pure, no calculator state)
   - `src/value.h`: The tagged `Value` (decimal number or string) shared by stack, number and registers
   - `src/stack.c`/`src/stack.h`: Stack of tagged values (decimal number or string)

@@ -146,7 +146,7 @@ static long _out_col = 0;
 
 /**
  * Load the DC_LINE_LENGTH and DC_PROMPT environment variables, parsing
- * DC_LINE_LENGTH exactly like dc (see README). Call once at startup, before
+ * DC_LINE_LENGTH exactly like dc (see --help). Call once at startup, before
  * any output. Invalid values are silently ignored, keeping the default.
  */
 void config_from_env(void) {
@@ -235,6 +235,15 @@ void emit_char(int c) {
  * @param s The string to emit
  */
 void emit_str(const char *s) {
+    size_t len = strlen(s);
+    long room = _out_line_length - 1 - _out_col;  // chars that fit before a wrap
+    if (_out_line_length <= 1 || (long) len <= room) {
+        // Fast path: wrapping is disabled, or the whole string fits on the
+        // line, so no wrap can trigger inside it
+        fputs(s, stdout);
+        _out_col += (long) len;
+        return;
+    }
     for (; *s != '\0'; s++)
         emit_char(*s);
 }

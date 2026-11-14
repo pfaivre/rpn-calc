@@ -1353,22 +1353,46 @@ test_env "DC_LINE_LENGTH=10" $'118059162\\\n071741130\\\n3424\n118059162\\\n0717
 # a piped standard input is not interactive: no prompt, as in dc
 test_env "DC_PROMPT=X>> " '1' '1p\n'
 
-# on a terminal, DC_PROMPT is printed before each read (needs python3 for a pty)
+# on a terminal, DC_PROMPT is printed before each read (needs python3 with a
+# pty module; the test is skipped when either is unavailable)
 if command -v python3 >/dev/null 2>&1; then
     tests_run=$((tests_run + 1))
     prompt_out=$(python3 -c '
-import os, pty, select, sys, time
+import os, select, sys, time
+try:
+    import pty
+except ImportError:
+    sys.exit(0)  # no pty module (e.g. Windows python): skip the test
 pid, fd = pty.fork()
 if pid == 0:
     os.environ["DC_PROMPT"] = "P> "
     os.execv("./rpn", ["./rpn"])
-time.sleep(0.3)            # let rpn print the prompt before the input arrives
+def read_until(token, timeout):
+    # collect output until token shows up, without fixed sleeps: the test
+    # stays valid however slow the child starts (e.g. under sanitizers)
+    out = b""
+    end = time.monotonic() + timeout
+    while token not in out:
+        left = end - time.monotonic()
+        if left <= 0:
+            break
+        r, _, _ = select.select([fd], [], [], left)
+        if not r:
+            break
+        try:
+            d = os.read(fd, 1024)
+        except OSError:
+            break
+        if not d:
+            break
+        out += d
+    return out
+out = read_until(b"P> ", 10)    # wait for the first prompt before typing
 os.write(fd, b"1p\n")
-time.sleep(0.3)
-os.write(fd, b"\x04")      # Ctrl-D: EOF on the terminal
-out = b""
+out += read_until(b"P> ", 10)   # pty echo of 1p, the printed 1, next prompt
+os.write(fd, b"\x04")           # Ctrl-D: EOF on the terminal
 while True:
-    r, _, _ = select.select([fd], [], [], 5)
+    r, _, _ = select.select([fd], [], [], 1)
     if not r:
         break
     try:
