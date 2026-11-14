@@ -510,20 +510,12 @@ static Stack _calc_exec_top(Stack s, Registers regs, int depth) {
  * @return The stack after the command
  */
 static Stack _calc_read_stdin(Stack s, Registers regs, int depth) {
-    if (stdin_is_tty()) {  // interactive input: show the prompt, as in dc
-        fputs(out_prompt(), stdout);
-        fflush(stdout);
-    }
-    char *line = read_line();
+    char *line = read_stdin_line();  // prompts and echoes when interactive
     if (!line) {
         // EOF: unwind all enclosing levels, then stop the top-level reader
         _calc_quit = depth + 1;
         _calc_exitAll = true;
         return s;
-    }
-    if (!stdin_is_tty()) {  // a terminal already echoes what the user types
-        emit_raw(line, strlen(line));
-        emit_char('\n');
     }
     s = _calc_run_macro(s, regs, line, depth);
     free(line);

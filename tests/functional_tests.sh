@@ -462,6 +462,8 @@ test_contains "rpn 0.2.2" -V
 test_contains "rpn 0.2.2" --version
 test_contains "Usage:" -h
 test_contains "Usage:" --help
+test_contains "DC_LINE_LENGTH" -h
+test_contains "DC_PROMPT" --help
 test_exit 0 -h
 test_exit 0 -V
 test_exit 1 -z   # unknown option
@@ -1321,12 +1323,21 @@ test "2 332 ^ p"  $'874900289913204769749000890847048546141267772357284974570308
 
 test_env "DC_LINE_LENGTH=10"  $'118059162\\\n071741130\\\n3424'  '2 70 ^ p\n'
 test_env "DC_LINE_LENGTH=0"   '1180591620717411303424'          '2 70 ^ p\n'   # 0 disables wrapping
-test_env "DC_LINE_LENGTH=1"   '123456789'                        '123456789 p\n'  # too small to wrap
+test_env "DC_LINE_LENGTH=1"   $'874900289913204769749000890847048546141267772357284974570308242563981\\\n1996797503692894052708092215296'  '2 332 ^ p\n'  # 1 is invalid: default 70
 test_env "DC_LINE_LENGTH=2"   $'1\\\n2\\\n3\\\n4\\\n5\\\n6\\\n7\\\n8\\\n9'  '123456789 p\n'
-test_env "DC_LINE_LENGTH=007" $'118059\\\n162071\\\n741130\\\n3424'  '2 70 ^ p\n'
-# invalid values are silently ignored, keeping the default 70
-for bad in abc -5 70abc ' 70' '70 ' +70 99999999999999999999999 ''; do
-    test_env "DC_LINE_LENGTH=$bad" '1180591620717411303424' '2 70 ^ p\n'
+test_env "DC_LINE_LENGTH=007" $'118059\\\n162071\\\n741130\\\n3424'  '2 70 ^ p\n'  # octal 7
+# parsed exactly like dc: strtol base 0, optional sign and surrounding
+# whitespace, value in [0, 2147483647]
+test_env "DC_LINE_LENGTH=012"    $'118059162\\\n071741130\\\n3424'    '2 70 ^ p\n'   # octal 10
+test_env "DC_LINE_LENGTH=0x10"   $'118059162071741\\\n1303424'         '2 70 ^ p\n'   # hex 16
+test_env "DC_LINE_LENGTH=+10"    $'118059162\\\n071741130\\\n3424'    '2 70 ^ p\n'
+test_env "DC_LINE_LENGTH=  12  " $'11805916207\\\n17411303424'           '2 70 ^ p\n'   # spaces ok
+test_env "DC_LINE_LENGTH=-0"     '8749002899132047697490008908470485461412677723572849745703082425639811996797503692894052708092215296'  '2 332 ^ p\n'  # -0 = 0: no wrap
+test_env "DC_LINE_LENGTH=2147483647" '8749002899132047697490008908470485461412677723572849745703082425639811996797503692894052708092215296'  '2 332 ^ p\n'  # INT_MAX: no wrap
+test_env "DC_LINE_LENGTH="   '8749002899132047697490008908470485461412677723572849745703082425639811996797503692894052708092215296'  '2 332 ^ p\n'  # empty = 0: no wrap
+# invalid values are silently ignored, keeping the default 70 (2 332 ^ p wraps at 70)
+for bad in abc -5 70abc 12x 2147483648 99999999999999999999999; do
+    test_env "DC_LINE_LENGTH=$bad" $'874900289913204769749000890847048546141267772357284974570308242563981\\\n1996797503692894052708092215296' '2 332 ^ p\n'
 done
 # each printed number wraps from column 0, even after n (no newline)
 test_env "DC_LINE_LENGTH=10" '1234567812345678'                 '12345678 n 12345678 n\n'

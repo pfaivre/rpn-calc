@@ -11,8 +11,9 @@
 # Note: rpn string literals must close on one line, so each macro is a single
 # line, and register names are written compactly (dc reads the name as the very
 # next character). Value registers are lowercase, macro registers uppercase.
-# The default output line is 57 chars, under dc's 70-column wrap limit; raising
-# D much beyond 50 makes dc wrap the pi line with a backslash (rpn does not).
+# The default output line is 57 chars, under the 70-column wrap limit; raising
+# D much beyond 50 wraps the pi line with a backslash-newline, in dc and rpn
+# alike (see DC_LINE_LENGTH).
 
 # --- knob: change this ---
 50 sd           # D: digits of pi after the decimal point to print

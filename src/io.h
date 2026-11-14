@@ -50,19 +50,20 @@ bool stdin_is_tty(void);
  * compatibility); call once at startup, before any output */
 void config_from_env(void);
 
-/** Column at which printed numbers are wrapped with a backslash-newline
- * (DC_LINE_LENGTH), 70 by default; 0 disables wrapping */
-long out_line_length(void);
+/** Print the DC_PROMPT before an interactive read from the standard input;
+ * nothing is printed when stdin is not a terminal, as in dc */
+void stdin_prompt(void);
 
-/** Prompt printed before each interactive read from the standard input
- * (DC_PROMPT), the empty string by default */
-const char *out_prompt(void);
+/** Read one line from the standard input, showing the prompt first when
+ * stdin is a terminal and echoing the line when it is not (a terminal
+ * already echoes what the user types) */
+[[nodiscard]] char *read_stdin_line(void);
 
 /** Forget the current wrap column (each printed number starts at column 0) */
 void emit_reset_col(void);
 
 /** Emit one character of a printed number: when the column reaches
- * out_line_length() - 1, a backslash-newline is emitted first and printing
+ * DC_LINE_LENGTH - 1, a backslash-newline is emitted first and printing
  * continues on the next line; a newline itself resets the column */
 void emit_char(int c);
 

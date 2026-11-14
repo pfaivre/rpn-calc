@@ -56,10 +56,8 @@ SOFTWARE.
 static Stack run_lines(Stack s, Registers regs, FILE *stream, const char *name) {
     char *line;
     while (true) {
-        if (stream == stdin && stdin_is_tty()) {  // interactive input: show the prompt
-            fputs(out_prompt(), stdout);
-            fflush(stdout);
-        }
+        if (stream == stdin)
+            stdin_prompt();  // interactive input: show the DC_PROMPT, as in dc
         line = read_line_stream(stream);
         if (line == NULL)
             break;
