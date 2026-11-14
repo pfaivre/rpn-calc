@@ -254,9 +254,9 @@ static Stack _calc_num_unop(Stack s, NumberUnop op) {
  */
 static void _calc_print(const Value *v, bool newline) {
     if (v->kind == VAL_STR) {
-        fputs(v->str, stdout);
+        emit_raw(v->str, strlen(v->str));  // strings are never wrapped
         if (newline)
-            putchar('\n');
+            emit_char('\n');
     } else {
         number_print(v, newline, _calc_out_base);
     }
@@ -510,6 +510,10 @@ static Stack _calc_exec_top(Stack s, Registers regs, int depth) {
  * @return The stack after the command
  */
 static Stack _calc_read_stdin(Stack s, Registers regs, int depth) {
+    if (stdin_is_tty()) {  // interactive input: show the prompt, as in dc
+        fputs(out_prompt(), stdout);
+        fflush(stdout);
+    }
     char *line = read_line();
     if (!line) {
         // EOF: unwind all enclosing levels, then stop the top-level reader
@@ -517,8 +521,10 @@ static Stack _calc_read_stdin(Stack s, Registers regs, int depth) {
         _calc_exitAll = true;
         return s;
     }
-    if (!stdin_is_tty())
-        puts(line);
+    if (!stdin_is_tty()) {  // a terminal already echoes what the user types
+        emit_raw(line, strlen(line));
+        emit_char('\n');
+    }
     s = _calc_run_macro(s, regs, line, depth);
     free(line);
     return s;
@@ -711,7 +717,7 @@ static Stack _calc_cmd_print_bytes(Stack s, Registers regs, int depth) {
     if (!_calc_pop_one(&s, &a))
         return s;
     if (a.kind == VAL_STR)
-        fputs(a.str, stdout);
+        emit_raw(a.str, strlen(a.str));  // strings are never wrapped
     else
         number_print_bytes(&a);
     value_clear(&a);

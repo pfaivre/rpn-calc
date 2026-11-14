@@ -1,0 +1,41 @@
+# plot.rpn — plot y = f(x) on an ASCII x/y graph.
+# Run with:  ./rpn examples/plot.rpn   (also runs under dc)
+# Knobs at the top: scale k, the x/y window, the grid size WxH, and the function
+# macro F (register p holds x; F must leave f(x) on the stack). The default is
+# sin(x) via a Taylor-series loop; one-line alternatives are listed below it.
+# Note: rpn string literals must close on one line, so each macro is a single
+# line, and register names are written compactly (dc reads the name as the very
+# next character). Value registers are lowercase, macro registers uppercase.
+
+# --- knobs: change these ---
+10 k            # scale: k decimal digits per number
+_6 sa 6 sb      # x window: [a, b]
+_1.5 sc 1.5 sd  # y window: [c, d]
+60 sw 20 sh     # W x H: grid size (columns x rows)
+
+# --- the function to plot: y = f(x); lp holds x, leave f(x) on the stack ---
+# default: sin(x) by Taylor series — u = sum, v = term, s = -x^2, n = term index
+[lp st lt lt * _1 * ss lt sv lt su 1 sn [lv ls * ln 2 * ln 2 * 1 + * / sv lu lv + su ln 1 + sn ln 19 <M] sM lMx lu] sF
+# alternatives:  [lp lp *] sF  (parabola)   [lp v] sF  (square root)
+#                [1 lp /] sF  (1/x)         [lp lp lp * * 2 -] sF  (x^3 - 2)
+
+# --- engine: no need to change below ---
+lb la - lw 1 - / se                          # stepx: x units per column
+0 lc - lh 1 - * ld lc - / 0.5 + K sz 0 k 1 / lz k sg       # axis row (y = 0)
+0 la - lw 1 - * lb la - / 1 + 0.5 + K sz 0 k 1 / lz k si   # axis column (x = 0)
+# one column: x = a + (col-1)*stepx, y = f(x), store the rounded row in array a
+[la lb la - lx 1 - * lw 1 - / + sp lFx lc - lh 1 - * ld lc - / 0.5 + K sz 0 k 1 / lz k lx :a] sK
+[lK x 1 lx + sx lw lx !>X] sX                # columns: x = 1..W
+# one cell: plot point wins, then the axes, then a blank
+[32 sS lx li =Q ly lg =A lx ;a ly =P lS P] sE
+[124 sS] sQ                                  # y-axis column: |
+[45 sS lx li =B] sA                          # x-axis row: - ...
+[43 sS] sB                                   # ... or + at the origin
+[42 sS] sP                                   # plot point: *
+[lE x 1 lx + sx lw lx !>C] sC                # one row of cells, columns 1..W
+[1 sx lC x 10 P] sD                          # one graph row + newline
+[lD x ly 1 - sy 0 ly !<Y] sY                 # rows top (H-1) to bottom (0)
+
+1 sx lXx        # compute all plot points into array a
+lh 1 - sy lYx   # render the graph
+q

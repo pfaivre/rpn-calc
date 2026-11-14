@@ -1,0 +1,33 @@
+# pi.rpn — print pi to N digits after the decimal point.
+# Gauss-Legendre AGM iteration in fixed-point arithmetic (numbers are
+# num/10^k): a=1, b=1/v2, t=1/4, p=1; each iteration does a'=(a+b)/2,
+# b'=v(a*b), t-=p*(a-a')^2, p*=2, and pi=(a+b)^2/(4t). Correct digits double
+# per iteration, so a fixed 32 iterations cover any scale below 2^32 and the
+# loop depth stays ~33 — rpn's 1000-level macro nesting cap never bites. (A
+# linearly convergent series like Machin's pi = 16*atan(1/5)-4*atan(1/239)
+# would need ~k/1.4 nested iterations and caps out around D=1380.) The real
+# ceiling is the scale factor cap k <= 1000000, i.e. D <= 999980.
+# Run with:  ./rpn examples/pi.rpn   (also runs under dc)
+# Note: rpn string literals must close on one line, so each macro is a single
+# line, and register names are written compactly (dc reads the name as the very
+# next character). Value registers are lowercase, macro registers uppercase.
+# The default output line is 57 chars, under dc's 70-column wrap limit; raising
+# D much beyond 50 makes dc wrap the pi line with a backslash (rpn does not).
+
+# --- knob: change this ---
+50 sd           # D: digits of pi after the decimal point to print
+
+# --- engine: no need to change below ---
+ld 20 + k       # scale k = D + 20 guard digits, absorbed before printing
+1 sa            # a = 1
+2 v 1 r / sb    # b = 1/sqrt(2)
+0.25 st         # t = 1/4
+1 sp            # p = 1
+0 sn            # n = iteration counter
+# one AGM iteration: u = (a+b)/2, w = sqrt(a*b), t -= p*(a-u)^2, p *= 2
+[la lb + 2 / su la lb * v sw lt lp la lu - d * * - st lp 2 * sp lu sa lw sb ln 1 + sn 32 ln <L] sL
+lLx             # 32 iterations (correct digits double each time)
+la lb + d * 4 lt * /        # pi = (a+b)^2 / (4t) at scale k
+ld k 1 / sp                 # drop the guard digits: pi at scale D, in p
+[pi = ] P lp p c
+q

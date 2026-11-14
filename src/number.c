@@ -205,15 +205,16 @@ static void print_base_digits(const mpz_t x, int base, long min_width) {
     mpz_get_str(digits, base, x);
     uppercase_digits(digits);
     for (long pad = min_width - (long) strlen(digits); pad > 0; pad--)
-        putchar('0');
-    fputs(digits, stdout);
+        emit_char('0');
+    emit_str(digits);
     free(digits);
 }
 
 void number_print(const Value *v, bool newline, long base) {
     const int b = (int) base;  // 2..16, validated at the i/o boundary
+    emit_reset_col();  // each number wraps from column 0, as in dc
     if (mpz_sgn(v->num) == 0) {
-        fputs("0", stdout);  // zero prints as "0", whatever its scale or sign
+        emit_str("0");  // zero prints as "0", whatever its scale or sign
     } else {
         bool neg = mpz_sgn(v->num) < 0;
         mpz_t ip, rem;
@@ -232,7 +233,7 @@ void number_print(const Value *v, bool newline, long base) {
         mpz_abs(ip, ip);
         mpz_abs(rem, rem);
         if (neg)
-            putchar('-');
+            emit_char('-');
 
         // Integer part in the output base (no leading zero before the point)
         if (v->scale == 0 || mpz_sgn(ip) > 0)
@@ -262,7 +263,7 @@ void number_print(const Value *v, bool newline, long base) {
             mpz_ui_pow_ui(pb, (unsigned long) base, (unsigned long) n);
             mpz_mul(frac, rem, pb);
             mpz_tdiv_q(frac, frac, p10);
-            putchar('.');
+            emit_char('.');
             print_base_digits(frac, b, n);
             mpz_clear(p10);
             mpz_clear(pb);
@@ -272,7 +273,7 @@ void number_print(const Value *v, bool newline, long base) {
         mpz_clear(rem);
     }
     if (newline)
-        putchar('\n');
+        emit_char('\n');
 }
 
 void number_print_bytes(const Value *v) {
@@ -287,9 +288,9 @@ void number_print_bytes(const Value *v) {
     size_t count = 0;
     mpz_export(bytes, &count, 1, 1, 1, 0, ip);
     if (count == 0)
-        putchar(0);  // zero prints as a single NUL byte
+        emit_raw("\0", 1);  // zero prints as a single NUL byte
     else
-        fwrite(bytes, 1, count, stdout);
+        emit_raw((const char *) bytes, count);  // raw bytes: never wrapped
     free(bytes);
     mpz_clear(ip);
 }

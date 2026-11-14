@@ -30,6 +30,7 @@ SOFTWARE.
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 #include <stdckdint.h>
 
 #ifdef _WIN32
@@ -131,6 +132,72 @@ bool stdin_is_tty(void) {
 #else
     return isatty(fileno(stdin));
 #endif
+}
+
+/** Default wrap width of printed numbers, as in dc */
+#define DEFAULT_LINE_LENGTH 70L
+
+static long _out_line_length = DEFAULT_LINE_LENGTH;
+static const char *_out_prompt = "";
+static long _out_col = 0;
+
+void config_from_env(void) {
+    const char *e = getenv("DC_LINE_LENGTH");
+    if (e != NULL && *e != '\0') {
+        bool all_digits = true;
+        for (const char *p = e; *p != '\0'; p++) {
+            if (*p < '0' || *p > '9') {
+                all_digits = false;
+                break;
+            }
+        }
+        if (all_digits) {
+            errno = 0;
+            long v = strtol(e, NULL, 10);
+            if (errno != ERANGE)  // 0 is valid: it disables wrapping
+                _out_line_length = v;
+        }
+        // invalid values (sign, spaces, trailing junk, overflow) are
+        // silently ignored, keeping the default, as in dc
+    }
+    const char *p = getenv("DC_PROMPT");
+    if (p != NULL)
+        _out_prompt = p;  // the environment string lives for the whole process
+}
+
+long out_line_length(void) {
+    return _out_line_length;
+}
+
+const char *out_prompt(void) {
+    return _out_prompt;
+}
+
+void emit_reset_col(void) {
+    _out_col = 0;
+}
+
+void emit_char(int c) {
+    if (c == '\n') {
+        putchar('\n');
+        _out_col = 0;
+        return;
+    }
+    if (_out_line_length > 1 && _out_col == _out_line_length - 1) {
+        fputs("\\\n", stdout);  // wrap: the backslash is the last column
+        _out_col = 0;
+    }
+    putchar(c);
+    _out_col++;
+}
+
+void emit_str(const char *s) {
+    for (; *s != '\0'; s++)
+        emit_char(*s);
+}
+
+void emit_raw(const char *s, size_t n) {
+    fwrite(s, 1, n, stdout);
 }
 
 void print_usage(const char *progName) {

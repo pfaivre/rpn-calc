@@ -4,8 +4,9 @@
 #
 # Two kinds of assertions:
 #   same      EXPR [EXPECTED]  -- rpn and GNU dc must agree: identical stdout
-#                                (dc's 70-column backslash-wrapping is normalized
-#                                away) and both must error or both not error.
+#                                (including dc's 70-column backslash-wrapping,
+#                                which rpn reproduces) and both must error or
+#                                both not error.
 #                                When EXPECTED is given, rpn's stdout is also
 #                                pinned to it.
 #   diverges  EXPR RPN_OUT RPN_ERR_SUBSTR RPN_CODE
@@ -43,12 +44,13 @@ function run_rpn ()
     R_ERR=$(cat "$tmpdir/r.err")
 }
 
-# Run dc on one stdin line; sets D_OUT (line-wrap normalized) / D_ERR / D_CODE
+# Run dc on one stdin line; sets D_OUT / D_ERR / D_CODE (stdout kept raw:
+# rpn wraps long numbers exactly like dc, so the comparison is byte-exact)
 function run_dc ()
 {
     printf '%s\n' "$1" | dc >"$tmpdir/d.out" 2>"$tmpdir/d.err"
     D_CODE=$?
-    D_OUT=$(sed -z 's/\\\n//g' "$tmpdir/d.out")  # undo dc's backslash-newline wrapping
+    D_OUT=$(cat "$tmpdir/d.out")
     D_ERR=$(cat "$tmpdir/d.err")
 }
 
@@ -164,7 +166,7 @@ same "2 k 2 _3 ^ p"       ".12"
 same "5 k 2 _2 ^ p"       ".25000"
 same "3 k K p"            "3"
 same "1000000 k K p"      "1000000"
-same "2 300 ^ p"                        # long output: exercises dc line-wrap normalization
+same "2 300 ^ p"                        # long output: exercises the shared 70-column wrapping
 same "1.5 2.25 + p"       "3.75"
 same "1.5 2.5 * p"        "3.7"      # * capped at k=0
 
@@ -302,6 +304,8 @@ same_file examples/fibonacci.rpn
 same_file examples/game_of_life.rpn
 same_file examples/miller_rabin.rpn
 same_file examples/mandelbrot.rpn
+same_file examples/plot.rpn
+same_file examples/pi.rpn
 
 # ===== IDENTICAL TO dc: | (modular exponentiation) =====
 same "2 3 5 | p"          "3"

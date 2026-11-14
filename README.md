@@ -77,6 +77,27 @@ first NUL byte is ignored.
 The exit status is 0 when every command succeeded, and 1 if any command failed
 (errors are reported on stderr) or an unknown option was given.
 
+## Environment variables
+rpn reads two environment variables, like dc:
+
+```sh
+DC_LINE_LENGTH
+```
+The column at which printed numbers are wrapped: when a number reaches this
+column, a backslash and a newline are emitted and printing continues on the
+next line, so each wrapped line is at most `DC_LINE_LENGTH` characters, the
+backslash included. Each printed number starts wrapping from column 0. The
+default is 70; 0 disables wrapping. Invalid values (a sign, spaces, trailing
+junk, or a number out of range) are silently ignored. Strings and the byte
+output of `P` on a number are never wrapped.
+
+```sh
+DC_PROMPT
+```
+The prompt printed before each line read interactively from the standard
+input (when it is a terminal), and before each `?` read. The default is empty
+(no prompt).
+
 ## Download
 Prebuilt statically linked binaries are available on the
 [releases page](https://github.com/pfaivre/rpn-calc/releases). Each archive
@@ -96,9 +117,29 @@ archives — show what can be done with this calculator. You can try them with
 rpn or dc:
 
 ```sh
-$ ./rpn examples/mandelbrot.rpn
-$ dc examples/mandelbrot.rpn
+$ ./rpn examples/plot.rpn
+                              |                             
+               *              |                             
+                              |                             
+                              |                             
+                              |    ****                     
+                *             |  **    *                    
+                              | *       *                   
+                              |                             
+                 *            |*         *                  
+------------------------------*-----------------------------
+                             *|                             
+                  *         * |           *                 
+                              |                             
+                   *       *  |                             
+                    *    **   |            *                
+                     ****     |                             
+                              |                             
+                              |                             
+                              |             *               
+                              |                             
 ```
+
 
 ## Commands
 Commands are single tokens; spaces between them may be omitted (`2 3*4+p`). The
@@ -214,6 +255,8 @@ For the commands listed above, rpn behaves like dc (checked against GNU dc 1.5.2
   conditionals `>r <r =r !>r !<r !=r`, and `q`/`Q`.
 - Bases `i I o O` and the `-e`/`-f`/positional-file/standard-input
   command-line ordering.
+- The `DC_LINE_LENGTH` and `DC_PROMPT` environment variables, including the
+  default 70-column backslash wrapping of long printed numbers.
 
 rpn deliberately differs from dc in the following ways:
 
