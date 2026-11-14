@@ -93,6 +93,23 @@ function test_lines ()
     fi
 }
 
+# test_env ENVASSIGN EXPECTED_STDOUT INPUT -- like test_lines, with one env var set
+function test_env ()
+{
+    local env_assign=$1
+    local expected_result=$2
+    local input=$3
+    local result
+
+    tests_run=$((tests_run + 1))
+    result=$(printf '%b' "$input" | env "$env_assign" ./rpn 2>/dev/null)
+
+    if [ "$result" != "$expected_result" ]; then
+        failures=$((failures + 1))
+        echo "FAIL env '$env_assign' on '$input': expected '$expected_result', got '$result'"
+    fi
+}
+
 # test_e EXPECTED_STDOUT ARGS... -- runs ./rpn ARGS... and checks stdout
 function test_e ()
 {
@@ -445,6 +462,8 @@ test_contains "rpn 0.2.2" -V
 test_contains "rpn 0.2.2" --version
 test_contains "Usage:" -h
 test_contains "Usage:" --help
+test_contains "DC_LINE_LENGTH" -h
+test_contains "DC_PROMPT" --help
 test_exit 0 -h
 test_exit 0 -V
 test_exit 1 -z   # unknown option
@@ -505,7 +524,8 @@ test_exit_stdin 1 "5"  '1 +\n5 p\n'
 
 # Long lines force several flushes of the 16-byte input buffer
 test "12345678901234567890123456789012345678901234567890 1 + p"  "12345678901234567890123456789012345678901234567891"
-test "12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678 1 + p"  "12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345679"
+# 101 digits: wraps at the default column 70 (69 digits + backslash-newline)
+test "12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678 1 + p"  $'123456789012345678901234567890123456789012345678901234567890123456789\\\n01234567890123456789012345679'
 
 # A NUL byte must not overflow the input buffer: strlen() stops at the NUL,
 # which used to defeat the flush guard and write past the buffer
@@ -1279,6 +1299,116 @@ lines=$(./rpn examples/mandelbrot.rpn </dev/null 2>/dev/null | wc -l)
 solid=$(./rpn examples/mandelbrot.rpn </dev/null 2>/dev/null | grep -c 'XXXXX')
 if [ "$lines" != "40" ] || [ "$solid" -lt "2" ]; then
     failures=$((failures+1)); echo "FAIL mandelbrot.rpn: lines=$lines solid_rows=$solid"
+fi
+
+# plot.rpn: sin(x) on a 60x20 grid with axes = 20 lines; line 10 is the x-axis
+# row: 30 dashes, the plot point at the origin (sin 0 = 0), 29 dashes
+tests_run=$((tests_run + 1))
+lines=$(./rpn examples/plot.rpn </dev/null 2>/dev/null | wc -l)
+row10=$(./rpn examples/plot.rpn </dev/null 2>/dev/null | sed -n 10p)
+if [ "$lines" != "20" ] || [ "$row10" != "------------------------------*-----------------------------" ]; then
+    failures=$((failures+1)); echo "FAIL plot.rpn: lines=$lines row10='$row10'"
+fi
+
+# pi.rpn (Gauss-Legendre AGM, 20 guard digits): one line, pi to the 50 default
+# digits after the decimal point
+tests_run=$((tests_run + 1))
+r=$(./rpn examples/pi.rpn </dev/null 2>/dev/null)
+[ "$r" = "pi = 3.14159265358979323846264338327950288419716939937510" ] || { failures=$((failures+1)); echo "FAIL pi.rpn: got '$r'"; }
+
+# ===== DC_LINE_LENGTH / DC_PROMPT environment variables (dc compatibility) =====
+
+# default: numbers wrap at column 70 with a backslash-newline (69 digits + \)
+test "2 332 ^ p"  $'874900289913204769749000890847048546141267772357284974570308242563981\\\n1996797503692894052708092215296'
+
+test_env "DC_LINE_LENGTH=10"  $'118059162\\\n071741130\\\n3424'  '2 70 ^ p\n'
+test_env "DC_LINE_LENGTH=0"   '1180591620717411303424'          '2 70 ^ p\n'   # 0 disables wrapping
+test_env "DC_LINE_LENGTH=1"   $'874900289913204769749000890847048546141267772357284974570308242563981\\\n1996797503692894052708092215296'  '2 332 ^ p\n'  # 1 is invalid: default 70
+test_env "DC_LINE_LENGTH=2"   $'1\\\n2\\\n3\\\n4\\\n5\\\n6\\\n7\\\n8\\\n9'  '123456789 p\n'
+test_env "DC_LINE_LENGTH=007" $'118059\\\n162071\\\n741130\\\n3424'  '2 70 ^ p\n'  # octal 7
+# parsed exactly like dc: strtol base 0, optional sign and surrounding
+# whitespace, value in [0, 2147483647]
+test_env "DC_LINE_LENGTH=012"    $'118059162\\\n071741130\\\n3424'    '2 70 ^ p\n'   # octal 10
+test_env "DC_LINE_LENGTH=0x10"   $'118059162071741\\\n1303424'         '2 70 ^ p\n'   # hex 16
+test_env "DC_LINE_LENGTH=+10"    $'118059162\\\n071741130\\\n3424'    '2 70 ^ p\n'
+test_env "DC_LINE_LENGTH=  12  " $'11805916207\\\n17411303424'           '2 70 ^ p\n'   # spaces ok
+test_env "DC_LINE_LENGTH=-0"     '8749002899132047697490008908470485461412677723572849745703082425639811996797503692894052708092215296'  '2 332 ^ p\n'  # -0 = 0: no wrap
+test_env "DC_LINE_LENGTH=2147483647" '8749002899132047697490008908470485461412677723572849745703082425639811996797503692894052708092215296'  '2 332 ^ p\n'  # INT_MAX: no wrap
+test_env "DC_LINE_LENGTH="   '8749002899132047697490008908470485461412677723572849745703082425639811996797503692894052708092215296'  '2 332 ^ p\n'  # empty = 0: no wrap
+# invalid values are silently ignored, keeping the default 70 (2 332 ^ p wraps at 70)
+for bad in abc -5 70abc 12x 2147483648 99999999999999999999999; do
+    test_env "DC_LINE_LENGTH=$bad" $'874900289913204769749000890847048546141267772357284974570308242563981\\\n1996797503692894052708092215296' '2 332 ^ p\n'
+done
+# each printed number wraps from column 0, even after n (no newline)
+test_env "DC_LINE_LENGTH=10" '1234567812345678'                 '12345678 n 12345678 n\n'
+test_env "DC_LINE_LENGTH=10" $'11111118059162\\\n071741130\\\n3424'  '11111 n 2 70 ^ n\n'
+# the sign and the point count toward the wrap column
+test_env "DC_LINE_LENGTH=10" $'-1234567.\\\n89123'               '_1234567.89123 p\n'
+# strings and the byte output of P are never wrapped and do not shift the column
+test_env "DC_LINE_LENGTH=10" $'aaaa118059162\\\n071741130\\\n3424'  '[aaaa] P 2 70 ^ n p\n'
+test_env "DC_LINE_LENGTH=10" 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'  '[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa] P\n'
+test_env "DC_LINE_LENGTH=2"  $'\x01\x86\xa0'                     '100000 P\n'
+# f wraps each number of the stack
+test_env "DC_LINE_LENGTH=10" $'118059162\\\n071741130\\\n3424\n118059162\\\n071741130\\\n3424'  '2 70 ^ 2 70 ^ f\n'
+# a piped standard input is not interactive: no prompt, as in dc
+test_env "DC_PROMPT=X>> " '1' '1p\n'
+
+# on a terminal, DC_PROMPT is printed before each read (needs python3 with a
+# pty module; the test is skipped when either is unavailable)
+if command -v python3 >/dev/null 2>&1; then
+    tests_run=$((tests_run + 1))
+    prompt_out=$(python3 -c '
+import os, select, sys, time
+try:
+    import pty
+except ImportError:
+    sys.exit(0)  # no pty module (e.g. Windows python): skip the test
+pid, fd = pty.fork()
+if pid == 0:
+    os.environ["DC_PROMPT"] = "P> "
+    os.execv("./rpn", ["./rpn"])
+def read_until(token, timeout):
+    # collect output until token shows up, without fixed sleeps: the test
+    # stays valid however slow the child starts (e.g. under sanitizers)
+    out = b""
+    end = time.monotonic() + timeout
+    while token not in out:
+        left = end - time.monotonic()
+        if left <= 0:
+            break
+        r, _, _ = select.select([fd], [], [], left)
+        if not r:
+            break
+        try:
+            d = os.read(fd, 1024)
+        except OSError:
+            break
+        if not d:
+            break
+        out += d
+    return out
+out = read_until(b"P> ", 10)    # wait for the first prompt before typing
+os.write(fd, b"1p\n")
+out += read_until(b"P> ", 10)   # pty echo of 1p, the printed 1, next prompt
+os.write(fd, b"\x04")           # Ctrl-D: EOF on the terminal
+while True:
+    r, _, _ = select.select([fd], [], [], 1)
+    if not r:
+        break
+    try:
+        d = os.read(fd, 1024)
+    except OSError:
+        break
+    if not d:
+        break
+    out += d
+os.waitpid(pid, 0)
+sys.stdout.buffer.write(out)
+' | tr -d '\r')           # the pty echoes the typed line (1p) itself
+    if [ "$prompt_out" != $'P> 1p\n1\nP> ' ]; then
+        failures=$((failures + 1))
+        echo "FAIL DC_PROMPT on a terminal: expected 'P> 1p\n1\nP> ', got '$prompt_out'"
+    fi
 fi
 
 # ===== SUMMARY =====

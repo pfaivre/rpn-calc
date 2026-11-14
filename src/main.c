@@ -55,7 +55,16 @@ SOFTWARE.
  */
 static Stack run_lines(Stack s, Registers regs, FILE *stream, const char *name) {
     char *line;
-    while ((line = read_line_stream(stream)) != NULL) {
+    while (true) {
+        if (stream == stdin) {
+            // Show the DC_PROMPT on a terminal, as in dc. Piped top-level
+            // input is not echoed here — only the ? command echoes (see
+            // read_stdin_line), also as in dc.
+            stdin_prompt();
+        }
+        line = read_line_stream(stream);
+        if (line == NULL)
+            break;
         s = calc_parse(s, regs, line);
         free(line);
         if (calc_quit_requested())  // q at the top level exits the program
@@ -123,6 +132,7 @@ int main(int argc, char **argv) {
     if (!_isatty(_fileno(stderr)))
         _setmode(_fileno(stderr), _O_BINARY);
 #endif
+    config_from_env();  // DC_LINE_LENGTH and DC_PROMPT, before any output
     Stack s = stack_init();
     Registers regs = registers_init();
     bool saw_opt_script = false;  // whether any -e or -f option was given

@@ -30,6 +30,10 @@ SOFTWARE.
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <string.h>
+#include <ctype.h>
+#include <limits.h>
 #include <stdckdint.h>
 
 #ifdef _WIN32
@@ -39,6 +43,9 @@ SOFTWARE.
 #endif
 
 #include "io.h"
+
+/** Default wrap width of printed numbers, as in dc */
+#define DEFAULT_LINE_LENGTH 70L
 
 /**
  * Print a fatal error on stderr and exit with a non-zero status
@@ -133,6 +140,124 @@ bool stdin_is_tty(void) {
 #endif
 }
 
+static long _out_line_length = DEFAULT_LINE_LENGTH;
+static const char *_out_prompt = "";
+static long _out_col = 0;
+
+/**
+ * Load the DC_LINE_LENGTH and DC_PROMPT environment variables, parsing
+ * DC_LINE_LENGTH exactly like dc (see --help). Call once at startup, before
+ * any output. Invalid values are silently ignored, keeping the default.
+ */
+void config_from_env(void) {
+    const char *e = getenv("DC_LINE_LENGTH");
+    if (e != NULL) {
+        // Like dc: strtol with base 0 (so 012 is octal 10 and 0x10 is 16),
+        // with optional leading whitespace and sign; only whitespace may
+        // follow the number, so an empty or all-whitespace value is 0. The
+        // value must be 0 — which disables wrapping — or in [2, INT_MAX].
+        errno = 0;
+        char *end = NULL;
+        long v = strtol(e, &end, 0);
+        bool valid = errno != ERANGE && (v == 0 || (v >= 2 && v <= INT_MAX));
+        for (const char *p = end; valid && *p != '\0'; p++) {
+            if (!isspace((unsigned char) *p))
+                valid = false;
+        }
+        if (valid)
+            _out_line_length = v;
+        // invalid values (1, negatives, junk, out of int range, overflow)
+        // are silently ignored, keeping the default, as in dc
+    }
+    const char *p = getenv("DC_PROMPT");
+    if (p != NULL)
+        _out_prompt = p;  // the environment string lives for the whole process
+}
+
+/**
+ * Print the DC_PROMPT before an interactive read from the standard input.
+ * Nothing is printed when stdin is not a terminal (piped input), as in dc.
+ */
+void stdin_prompt(void) {
+    if (stdin_is_tty()) {
+        fputs(_out_prompt, stdout);
+        fflush(stdout);
+    }
+}
+
+/**
+ * Read one line from the standard input: show the DC_PROMPT first when stdin
+ * is a terminal, and echo the line when it is not (a terminal already echoes
+ * what the user types).
+ * @return A newly allocated string, or NULL at EOF (see read_line)
+ */
+[[nodiscard]] char *read_stdin_line(void) {
+    stdin_prompt();
+    char *line = read_line();
+    if (line != NULL && !stdin_is_tty()) {
+        emit_raw(line, strlen(line));
+        emit_char('\n');
+    }
+    return line;
+}
+
+/**
+ * Forget the current wrap column: each printed number starts wrapping from
+ * column 0, as in dc.
+ */
+void emit_reset_col(void) {
+    _out_col = 0;
+}
+
+/**
+ * Emit one character of a printed number: when the column reaches
+ * _out_line_length - 1, a backslash-newline is emitted first and printing
+ * continues on the next line; a newline itself resets the column. A line
+ * length of 0 or 1 disables wrapping.
+ * @param c The character to emit
+ */
+void emit_char(int c) {
+    if (c == '\n') {
+        putchar('\n');
+        _out_col = 0;
+        return;
+    }
+    if (_out_line_length > 1 && _out_col == _out_line_length - 1) {
+        fputs("\\\n", stdout);  // wrap: the backslash is the last column
+        _out_col = 0;
+    }
+    putchar(c);
+    _out_col++;
+}
+
+/**
+ * Emit a NUL-terminated string of number characters, wrapping like emit_char
+ * @param s The string to emit
+ */
+void emit_str(const char *s) {
+    size_t len = strlen(s);
+    long room = _out_line_length - 1 - _out_col;  // chars that fit before a wrap
+    if (_out_line_length <= 1 || (long) len <= room) {
+        // Fast path: wrapping is disabled, or the whole string fits on the
+        // line, so no wrap can trigger inside it
+        fputs(s, stdout);
+        _out_col += (long) len;
+        return;
+    }
+    for (; *s != '\0'; s++)
+        emit_char(*s);
+}
+
+/**
+ * Emit raw bytes (a printed string, the byte stream of P on a number):
+ * never wrapped, and not counted in the wrap column
+ * @param s The bytes to emit
+ * @param n Their count
+ */
+void emit_raw(const char *s, size_t n) {
+    fwrite(s, 1, n, stdout);
+}
+
 void print_usage(const char *progName) {
     printf("Usage: %s [OPTION] [file...]\n", progName);
     puts("  -e, --expression=EXPR    evaluate expression");
@@ -140,6 +265,13 @@ void print_usage(const char *progName) {
     puts("  -h, --help               display this help and exit");
     puts("  -V, --version            output version information and exit");
     puts("  file...                  read and execute script files, in order");
+    puts("");
+    puts("Environment variables:");
+    puts("  DC_LINE_LENGTH  wrap column of printed numbers: a backslash-newline is");
+    puts("                  emitted at that column (default 70; 0 disables wrapping);");
+    puts("                  parsed like dc: decimal, octal or hex, 0 or 2..2147483647");
+    puts("  DC_PROMPT       prompt printed before each read from a terminal");
+    puts("                  (default: no prompt)");
 }
 
 void print_version(const char *version, const char *copyright) {

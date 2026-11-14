@@ -46,6 +46,34 @@ SOFTWARE.
 /** Whether the standard input is a terminal (which already echoes input) */
 bool stdin_is_tty(void);
 
+/** Load the DC_LINE_LENGTH and DC_PROMPT environment variables (dc
+ * compatibility); call once at startup, before any output */
+void config_from_env(void);
+
+/** Print the DC_PROMPT before an interactive read from the standard input;
+ * nothing is printed when stdin is not a terminal, as in dc */
+void stdin_prompt(void);
+
+/** Read one line from the standard input, showing the prompt first when
+ * stdin is a terminal and echoing the line when it is not (a terminal
+ * already echoes what the user types) */
+[[nodiscard]] char *read_stdin_line(void);
+
+/** Forget the current wrap column (each printed number starts at column 0) */
+void emit_reset_col(void);
+
+/** Emit one character of a printed number: when the column reaches
+ * DC_LINE_LENGTH - 1, a backslash-newline is emitted first and printing
+ * continues on the next line; a newline itself resets the column */
+void emit_char(int c);
+
+/** Emit a NUL-terminated string of number characters (see emit_char) */
+void emit_str(const char *s);
+
+/** Emit raw bytes (a printed string, the byte stream of P on a number):
+ * never wrapped, and not counted in the wrap column */
+void emit_raw(const char *s, size_t n);
+
 void print_usage(const char *progName);
 
 void print_version(const char *version, const char *copyright);

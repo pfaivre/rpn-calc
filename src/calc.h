@@ -42,5 +42,8 @@ void calc_report_errorf(const char *fmt, ...);
 /** Whether q asked to leave the top-level input (main then stops and exits) */
 [[nodiscard]] bool calc_quit_requested();
 
+/** The output base set by o (2..16), used when printing numbers */
+[[nodiscard]] long calc_out_base(void);
+
 #endif
 
